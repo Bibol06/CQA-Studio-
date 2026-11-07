@@ -18,6 +18,13 @@ class InsightTests(unittest.TestCase):
         raw=insights();raw['summary']['evidence']=[{'message_index':4}]
         clean=validate_insights(raw,record(),default_checklist(),answers())
         self.assertEqual(clean['summary']['evidence'][0]['quote'],record()['transcript'][3]['text'])
+    def test_integer_optional_reference_is_canonicalized_but_boolean_rejected(self):
+        raw=insights();raw['summary']['evidence']=[4]
+        clean=validate_insights(raw,record(),default_checklist(),answers())
+        self.assertEqual(clean['summary']['evidence'][0]['message_index'],4)
+        self.assertEqual(clean['summary']['evidence'][0]['quote'],record()['transcript'][3]['text'])
+        raw['summary']['evidence']=[True]
+        with self.assertRaises(ValueError):validate_insights(raw,record(),default_checklist(),answers())
     def test_valid_summary(self):
         clean=validate_insights(insights(),record(),default_checklist(),answers())
         self.assertEqual(clean['summary']['status'],'resolved')

@@ -4,6 +4,8 @@ def evidence(items, record):
         raise ValueError('Для вывода нужны от 1 до 10 фрагментов-доказательств')
     clean = []
     for item in items:
+        if type(item) is int:
+            item = {'message_index': item}
         if not isinstance(item, dict):
             raise ValueError('Неверная структура доказательства')
         index = item.get('message_index')

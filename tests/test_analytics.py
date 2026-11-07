@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from test_app import record, answers, insights
 from cqa.analytics import build_analytics, topics, friction
-from cqa.domain import default_checklist
+from cqa.domain import default_checklist, validate_result
 from cqa.insights import validate_requests, request_outcome
 from cqa.providers import call_model, EvaluationError, attempt_meta
 from cqa.queue import Worker
@@ -46,6 +46,24 @@ class EnrichmentTests(unittest.TestCase):
     def test_malformed_core_shape_has_safe_validation_error(self):
         r=self.result();r['criteria'][0]=[]
         with self.assertRaises(EvaluationError):self.call(r)
+    def test_source_turns_copy_exact_original_text_without_model_retyping(self):
+        r=self.result()
+        for a in r['criteria']:
+            for ev in a['evidence']:ev.pop('quote',None)
+        a,meta,_=self.call(r)
+        self.assertEqual(meta['evidence_mode'],'source_turns')
+        for answer in a:
+            for ev in answer['evidence']:
+                self.assertEqual(ev['quote'],record()['transcript'][ev['message_index']-1]['text'])
+        # Stored canonical answers still pass the independent submission validator.
+        self.assertEqual(validate_result(default_checklist(),record(),{'conversation_id':record()['conversation_id'],'criteria':a}),a)
+    def test_source_turn_mode_does_not_accept_nonexistent_or_boolean_indices(self):
+        for index in [0,999,True]:
+            r=self.result();r['criteria'][0]['evidence']=[{'message_index':index}]
+            with self.subTest(index=index),self.assertRaises(EvaluationError):self.call(r)
+    def test_default_validator_still_requires_exact_quote(self):
+        r=self.result();r['criteria'][0]['evidence'][0].pop('quote')
+        with self.assertRaises(ValueError):validate_result(default_checklist(),record(),r)
     def test_question_status_requires_operator_evidence(self):
         raw=[{'request':'Тариф','status':'answered','request_evidence':[{'message_index':1}], 'answer_evidence':[{'message_index':2}]}]
         with self.assertRaises(ValueError):validate_requests(raw,record())  # bot is not operator

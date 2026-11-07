@@ -74,7 +74,7 @@ def score(config,answers):
             'earned':float(earned),'applicable_weight':float(denominator),'gross_error':gross,
             'sections':{n:normalize(e,w) if complete else None for n,(e,w) in sections.items()}}
 
-def validate_result(config,record,result,require_evidence=True):
+def validate_result(config,record,result,require_evidence=True,copy_source_quotes=False):
     if not isinstance(result,dict) or result.get('conversation_id')!=record['conversation_id']: raise ValueError('Модель вернула неверный ID диалога')
     raw=result.get('criteria')
     if not isinstance(raw,list) or len(raw)!=len(config['criteria']): raise ValueError('Модель вернула не все критерии')
@@ -95,6 +95,10 @@ def validate_result(config,record,result,require_evidence=True):
             index=ev.get('message_index'); end=ev.get('end_message_index',index); quote=ev.get('quote')
             if isinstance(index,bool) or not isinstance(index,int) or not 1<=index<=len(record['transcript']): raise ValueError('Ссылка на несуществующую реплику')
             if isinstance(end,bool) or not isinstance(end,int) or not index<=end<=len(record['transcript']): raise ValueError('Неверный участок доказательства')
+            # In source-turn mode the model selects a source; the server owns its
+            # wording. An explicitly supplied quote must still match exactly.
+            if copy_source_quotes and 'quote' not in ev:
+                quote=record['transcript'][index-1]['text']
             if not isinstance(quote,str) or not quote.strip() or quote not in record['transcript'][index-1]['text']: raise ValueError('Цитата не найдена в исходной реплике')
             clean.append({'message_index':index,'end_message_index':end,'quote':quote})
         answers.append({'criterion_id':cid,'value':value,'reason':reason[:5000],'evidence':clean,'needs_review':bool(item.get('needs_review',False)) or not clean})
