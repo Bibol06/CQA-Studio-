@@ -214,12 +214,14 @@ async function chooseChannel(channel) {
 }
 let selectionSerial = 0;
 let resultsMode = "text";
+let transcriptMode = "readable";
 async function selectConversation(id) {
   const serial = ++selectionSerial;
   $("#audio-player")?.pause?.();
   if (typeof audioPreviewEnd !== "undefined") audioPreviewEnd = null;
   selected = id;
   resultsMode = "text";
+  transcriptMode = "readable";
   detail = null;
   renderList();
   $("#transcript-panel").innerHTML =
@@ -253,19 +255,29 @@ function renderDetail() {
   renderQueueBanner();
 }
 let showContext = true;
+function readableEdition() {
+  return [detail?.audio_analysis,...(detail?.audio_history || [])]
+    .map(a => a?.result?.readable_transcript)
+    .find(e => e?.conversation_id === detail?.record.conversation_id) || null;
+}
+function transcriptMessage(t,i,edits) {
+  const edited = t.speaker !== "system" ? edits?.get(i+1) : null;
+  return `<article class="message ${esc(t.speaker)}" id="message-${i + 1}">${t.speaker !== "system" ? `<div class="message-header"><span class="message-role">${roles[t.speaker] || esc(t.speaker)}</span><span>${esc(t.timestamp)}</span><span class="message-num">#${i + 1}</span>${edited?.uncertain ? '<span class="badge amber">Сверьте с записью</span>' : ""}</div>` : ""}<div class="message-body">${t.speaker === "system" ? `${esc(t.timestamp)} · ` : ""}${esc(edited?.text ?? t.text)}</div>${edited?.warning ? `<p class="transcript-edit-warning">${esc(edited.warning)}</p>` : ""}</article>`;
+}
 function renderTranscript() {
   const r = detail.record,
     e = detail.evaluation,
     url = r.channel === "voice call" && r.audio_url ? "/api/audio/" + encodeURIComponent(r.conversation_id) : null;
   const previousAudio = $("#audio-player");
+  const edition = r.channel === "voice call" ? readableEdition() : null;
+  const readable = !!edition && transcriptMode === "readable";
+  const edits = readable ? new Map(edition.turns.map(t => [t.message_index,t])) : null;
+  const editionTools = r.channel === "voice call" ? `<div class="transcript-edition-tools"><div role="tablist" aria-label="Версия расшифровки"><button role="tab" data-action="transcript-mode" data-mode="readable" aria-selected="${readable}" ${!edition ? "disabled" : ""}>Читаемый текст</button><button role="tab" data-action="transcript-mode" data-mode="original" aria-selected="${!readable}">Оригинал</button></div><button class="button text small" data-action="revise-transcript">${edition ? "Обновить текст и звук" : "Исправить текст по записи"}</button><p>${readable ? `${edition.editor === "assistant" ? "Редакторская версия AI" : "Редакция AI по записи"}: изменено реплик ${edition.changed_turns}; неуверенных ${edition.uncertain_turns}. ${edition.validation?.fallback_turns ? `Правки ${edition.validation.fallback_turns} реплик отклонены — оставлен оригинал. ` : ""}Неразборчивые слова отмечены; проверьте спорные места по звуку.` : "Оригинал распознавания организаторов. Читаемая редакция исправляет оформление и явные ошибки по записи."} Оценки и цитаты используют оригинал.</p>${detail.audio_analysis?.result.readable_transcript_error ? `<p class="submission-warning">Новая редакция не сохранена: ${esc(detail.audio_analysis.result.readable_transcript_error)}</p>` : ""}</div>` : "";
   $("#transcript-panel").innerHTML =
-    `<div class="transcript-heading"><span class="channel-avatar">${icon(r.channel === "voice call" ? "phone" : "messages")}</span><div><h2>${esc(r.conversation_id)}</h2><p>${r.channel === "voice call" ? "Телефонный разговор" : "Переписка с поддержкой"} · ${esc(r.language)} · ${r.transcript.length} реплик</p></div><div class="transcript-actions"><span class="badge green">${esc(detail.dataset_group || "DEV")}</span></div></div>${url ? `<div class="audio-box"><audio id="audio-player" data-cid="${esc(r.conversation_id)}" controls preload="metadata" src="${url}"></audio><div id="audio-status" class="audio-status">Получаем запись и длительность…</div><button class="button text small" data-action="audio-info">Проверить запись</button><p>Время плеера начинается с 0:00 записи. Связь с ISO-метками транскрипта отдельно не подтверждена.</p></div>` : ""}<div class="transcript-tools"><span>Исходный транскрипт</span><label class="toggle"><input type="checkbox" id="context-toggle" ${showContext ? "checked" : ""}>Бот и события</label></div><div class="transcript-messages" id="messages">${r.transcript
+    `<div class="transcript-heading"><span class="channel-avatar">${icon(r.channel === "voice call" ? "phone" : "messages")}</span><div><h2>${esc(r.conversation_id)}</h2><p>${r.channel === "voice call" ? "Телефонный разговор" : "Переписка с поддержкой"} · ${esc(r.language)} · ${r.transcript.length} реплик</p></div><div class="transcript-actions"><span class="badge green">${esc(detail.dataset_group || "DEV")}</span></div></div>${url ? `<div class="audio-box"><audio id="audio-player" data-cid="${esc(r.conversation_id)}" controls preload="metadata" src="${url}"></audio><div id="audio-status" class="audio-status">Получаем запись и длительность…</div><button class="button text small" data-action="audio-info">Проверить запись</button><p>Время плеера начинается с 0:00 записи. Связь с ISO-метками транскрипта отдельно не подтверждена.</p></div>` : ""}${editionTools}<div class="transcript-tools"><span>${readable ? "Читаемая редакция AI" : "Исходный транскрипт"}</span><label class="toggle"><input type="checkbox" id="context-toggle" ${showContext ? "checked" : ""}>Бот и события</label></div><div class="transcript-messages" id="messages">${r.transcript
       .map((t, i) => ({ t, i }))
       .filter(({ t }) => showContext || !["bot", "system"].includes(t.speaker))
-      .map(
-        ({ t, i }) =>
-          `<article class="message ${esc(t.speaker)}" id="message-${i + 1}">${t.speaker !== "system" ? `<div class="message-header"><span class="message-role">${roles[t.speaker] || esc(t.speaker)}</span><span>${esc(t.timestamp)}</span><span class="message-num">#${i + 1}</span></div>` : ""}<div class="message-body">${t.speaker === "system" ? `${esc(t.timestamp)} · ` : ""}${esc(t.text)}</div></article>`,
-      )
+      .map(({ t, i }) => transcriptMessage(t,i,edits))
       .join(
         "",
       )}<div class="transcript-end">Конец предоставленного транскрипта</div></div>`;
@@ -327,13 +339,13 @@ function renderAudioResults() {
   }
   $("#results-panel").innerHTML = `<div class="results-header"><h2>Анализ звука</h2><span class="badge">AI-наблюдения</span></div>${resultModeTabs()}<div class="result-scroll audio-results">${body}</div>`;
 }
-async function analyzeAudio() {
+async function analyzeAudio({forTranscript = false} = {}) {
   if (detail?.record.channel !== "voice call") return;
   const cid = selected, serial = selectionSerial;
   const result = await api("jobs",{conversation_ids:[cid],kind:"audio"});
   await pollJobs();
   if (selected === cid && selectionSerial === serial && detail?.record.conversation_id === cid && resultsMode === "audio") renderAudioResults();
-  toast(result.created.length ? "Аудиоанализ добавлен в очередь" : "Аудиоанализ уже находится в очереди");
+  toast(result.created.length ? forTranscript ? "Редакция текста и анализ звука добавлены в очередь" : "Аудиоанализ добавлен в очередь" : "Аудиоанализ уже находится в очереди");
 }
 async function reviewAudio(button) {
   const cid = selected, serial = selectionSerial;
@@ -415,8 +427,9 @@ function renderHistory(e) {
   return `<div class="section-card"><details><summary>История решений · ${e.appeals.length}</summary><div class="timeline">${e.appeals.length ? e.appeals.map((a) => `<div class="timeline-item"><strong>Критерий ${a.criterion_id} · ${a.status === "open" ? "Апелляция открыта" : "Решение сохранено"}</strong>${esc(a.comment)}${a.reason ? `<br>Решение: ${esc(a.value ? JSON.parse(a.value) : "")} · ${esc(a.reason)}` : ""}<br><small>${esc(new Date(a.created_at).toLocaleString("ru-RU"))}</small></div>`).join("") : "<p>Решений пока нет.</p>"}</div></details>${detail.history.length ? `<details><summary>Предыдущие проверки · ${detail.history.length}</summary>${detail.history.map((h) => `<p>Проверка #${h.id} · v${h.checklist.version} · ${esc(h.meta.model)} · ${fmt(h.final_score.total)}/100</p>`).join("")}</details>` : ""}</div>`;
 }
 function jumpEvidence(index, end) {
-  if (!showContext) {
+  if (!showContext || transcriptMode !== "original") {
     showContext = true;
+    transcriptMode = "original";
     renderTranscript();
   }
   document
@@ -561,6 +574,10 @@ function renderQueueBanner() {
     document.querySelectorAll('[data-action="analyze-audio"]').forEach(b => {
       b.disabled = !!audioJob;
       b.innerHTML = icon(audioJob ? "clock" : "sparkle") + (audioJob ? esc(jobLabels[audioJob.status]) : detail.audio_analysis ? "Проанализировать звук заново" : "Проанализировать звук");
+    });
+    document.querySelectorAll('[data-action="revise-transcript"]').forEach(b => {
+      b.disabled = !!audioJob;
+      b.textContent = audioJob ? jobLabels[audioJob.status] : readableEdition() ? "Обновить текст и звук" : "Исправить текст по записи";
     });
     const latestAudioJob = jobsState.jobs.find(j => j.conversation_id === selected && j.kind === "audio");
     const audioMessage = $("#audio-job-status");
@@ -786,7 +803,7 @@ async function settingsModal() {
       )
       .join(
         "",
-      )}</select></label><label class="field">Режим Gemini для текста<select id="reasoning-effort"><option value="low" ${!["default","medium","high"].includes(settings.reasoning_effort) ? "selected" : ""}>Быстрый — low</option><option value="medium" ${settings.reasoning_effort === "medium" ? "selected" : ""}>Подробный — medium</option><option value="high" ${settings.reasoning_effort === "high" ? "selected" : ""}>Подробный — high</option><option value="default" ${settings.reasoning_effort === "default" ? "selected" : ""}>Стандартный режим модели</option></select><small>Влияет на рассуждение Gemini. Скорость и качество нужно проверять на данных.</small></label><label class="field">Базовый URL<input id="base-url" type="url" required value="${esc(settings.base_url)}"></label><label class="field">Название модели<input id="model-name" placeholder="Точное имя модели у провайдера" value="${esc(settings.model)}"></label><label class="field">API-ключ<input id="api-key" type="password" autocomplete="off" placeholder="${settings.key_configured ? "Ключ уже задан; оставьте пустым для сохранения" : "Ключ доступа к модели"}"><small>Для локальной Ollama ключ обычно не нужен.</small></label><div class="form-row"><label class="field">Вход, $ за 1 млн токенов<input id="input-price" type="number" min="0" step="0.001" value="${settings.input_price ?? ""}" placeholder="Неизвестно"></label><label class="field">Выход, $ за 1 млн токенов<input id="output-price" type="number" min="0" step="0.001" value="${settings.output_price ?? ""}" placeholder="Неизвестно"></label></div><div class="form-help">Текстовая проверка отправляет модели транскрипт и чек-лист. Кнопка «Проанализировать звук» отправляет саму запись в Gemini. Цены в этих полях используются для текстовых проверок; стоимость аудио пока не вычисляется. Без модели доступны прослушивание и ручной пересмотр.</div></form>`,
+      )}</select></label><label class="field">Режим Gemini для текста<select id="reasoning-effort"><option value="low" ${!["default","medium","high"].includes(settings.reasoning_effort) ? "selected" : ""}>Быстрый — low</option><option value="medium" ${settings.reasoning_effort === "medium" ? "selected" : ""}>Подробный — medium</option><option value="high" ${settings.reasoning_effort === "high" ? "selected" : ""}>Подробный — high</option><option value="default" ${settings.reasoning_effort === "default" ? "selected" : ""}>Стандартный режим модели</option></select><small>Влияет на рассуждение Gemini. Скорость и качество нужно проверять на данных.</small></label><label class="field">Базовый URL<input id="base-url" type="url" required value="${esc(settings.base_url)}"></label><label class="field">Название модели<input id="model-name" placeholder="Точное имя модели у провайдера" value="${esc(settings.model)}"></label><label class="field">API-ключ<input id="api-key" type="password" autocomplete="off" placeholder="${settings.key_configured ? "Ключ уже задан; оставьте пустым для сохранения" : "Ключ доступа к модели"}"><small>Для локальной Ollama ключ обычно не нужен.</small></label><div class="form-row"><label class="field">Вход, $ за 1 млн токенов<input id="input-price" type="number" min="0" step="0.001" value="${settings.input_price ?? ""}" placeholder="Неизвестно"></label><label class="field">Выход, $ за 1 млн токенов<input id="output-price" type="number" min="0" step="0.001" value="${settings.output_price ?? ""}" placeholder="Неизвестно"></label></div><div class="form-help">Текстовая проверка отправляет модели транскрипт и чек-лист. Кнопка «Проанализировать звук» отправляет запись в Gemini. Для читаемой редакции отдельным запросом отправляются запись и исходная расшифровка. Цены в этих полях используются для текстовых проверок; стоимость аудио пока не вычисляется. Без модели доступны прослушивание и ручной пересмотр.</div></form>`,
     `<button class="button secondary" data-action="close-modal">Отмена</button><button class="button primary" data-action="save-settings">Сохранить настройки</button>`,
   );
 }
@@ -998,6 +1015,13 @@ document.addEventListener("click", async (event) => {
       case "result-mode":
         resultsMode = button.dataset.mode;
         renderResults();
+        break;
+      case "transcript-mode":
+        transcriptMode = button.dataset.mode;
+        renderTranscript();
+        break;
+      case "revise-transcript":
+        await analyzeAudio({forTranscript:true});
         break;
       case "audio-info":
         await loadAudioInfo();

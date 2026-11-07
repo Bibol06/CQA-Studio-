@@ -135,7 +135,7 @@ class AudioValidationTests(unittest.TestCase):
             def __exit__(self,*args):pass
             def read(self,*args):return json.dumps(response).encode()
         media=unittest.mock.Mock();media.get.return_value=c
-        with patch('cqa.audio_analysis.urlopen',return_value=Response()) as request:
+        with patch('cqa.audio_analysis.urlopen',return_value=Response()) as request,patch('cqa.transcript.call_readable',return_value=({'turns':[]},{'calls':1,'usage':{'input_tokens':40,'output_tokens':20}})):
             result,meta=call_audio(r,SETTINGS,'unit-test-key',media)
         wire=request.call_args.args[0];payload=json.loads(wire.data)
         self.assertIn(':generateContent',wire.full_url)
@@ -143,6 +143,20 @@ class AudioValidationTests(unittest.TestCase):
         self.assertNotIn('SENTINEL_TRANSCRIPT_DO_NOT_SEND',wire.data.decode())
         self.assertNotIn('unit-test-key',json.dumps(meta));self.assertIsNone(meta['cost_usd'])
         self.assertEqual(meta['kind'],'audio');self.assertEqual(len(result['checks']),len(EVENT_LABELS))
+        self.assertEqual(meta['calls'],2);self.assertEqual(meta['usage']['input_tokens'],140)
+    def test_editor_failure_keeps_audio_observations(self):
+        c=wav_clip();r=call_record()
+        response={'candidates':[{'content':{'parts':[{'text':json.dumps(audio_result())}]}}]}
+        class Response:
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            def read(self,*args):return json.dumps(response).encode()
+        from cqa.providers import EvaluationError
+        with patch('cqa.audio_analysis.urlopen',return_value=Response()),patch('cqa.transcript.call_readable',side_effect=EvaluationError('Редакция не прошла проверку',{'calls':1,'usage':{}})):
+            result,meta=call_audio(r,SETTINGS,'unit-test-key',unittest.mock.Mock(get=lambda cid:c))
+        self.assertEqual(len(result['events']),1)
+        self.assertEqual(result['readable_transcript_error'],'Редакция не прошла проверку')
+        self.assertEqual(meta['calls'],2)
 
 
 class AudioStoreTests(unittest.TestCase):

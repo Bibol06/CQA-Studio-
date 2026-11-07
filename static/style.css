@@ -1796,6 +1796,14 @@ dialog::backdrop {
 .review-workspace {
   overflow: clip;
 }
+.transcript-edition-tools { padding: 10px 18px; border-bottom: 1px solid var(--line); background: #f7faf6; }
+.transcript-edition-tools [role="tablist"] { display: flex; gap: 6px; margin-bottom: 6px; }
+.transcript-edition-tools [role="tab"] { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--muted); cursor: pointer; }
+.transcript-edition-tools [aria-selected="true"] { background: #e7f3e8; color: #087b52; border-color: #c8dfc8; }
+.transcript-edition-tools [role="tab"]:disabled { opacity: .5; cursor: default; }
+.transcript-edition-tools p { font-size: 11px; line-height: 1.55; color: var(--muted); margin: 4px 0; }
+.message-header { flex-wrap: wrap; }
+.transcript-edit-warning { color: #825d21; font-size: 11px; line-height: 1.5; margin: 8px 0 0; }
 .submission-fields {
   display: grid;
   grid-template-columns: 1fr 1fr 1.5fr;

@@ -4,12 +4,14 @@ import json
 import math
 import re
 import time
+import importlib
+import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .providers import EvaluationError, safe_endpoint
 
-VERSION='acoustic-v5'
+VERSION='acoustic-v7'
 EVENT_LABELS={
     'cough':'Кашель','throat_clear':'Прочищение горла','laugh':'Смех',
     'filled_pause':'Пауза с заполнителем','repetition':'Повтор звука или слова',
@@ -164,5 +166,21 @@ def call_audio(record,settings,key,media):
     except ValueError as error:raise failed(str(error),'incomplete') from None
     try:result=validate_audio(raw,record,clip)
     except ValueError as error:raise failed(str(error),'validation') from None
+    # A separate request edits words using audio + source. It cannot influence
+    # the audio-only observation request above or overwrite the source turns.
+    from . import transcript
+    if os.environ.get('CQA_RELOAD_AUDIO')=='1':transcript=importlib.reload(transcript)
+    try:
+        edition,edit_meta=transcript.call_readable(record,settings,key,clip)
+        result['readable_transcript']=edition
+    except EvaluationError as error:
+        result['readable_transcript_error']=str(error)
+        edit_meta=error.meta
+    meta['transcript_edit']=edit_meta
+    meta['audio_only_usage']=dict(meta['usage'])
+    meta['calls']+=edit_meta.get('calls',0)
+    for name in ['input_tokens','output_tokens','thinking_tokens']:
+        a=meta['usage'].get(name);b=edit_meta.get('usage',{}).get(name)
+        meta['usage'][name]=a+b if isinstance(a,(int,float)) and isinstance(b,(int,float)) else None
     meta['elapsed_seconds']=round(time.monotonic()-started,2)
     return result,meta
