@@ -1,0 +1,719 @@
+"use strict";
+const $ = (s) => document.querySelector(s);
+const esc = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+const paths = {
+  messages:
+    "M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2ZM7 8h10M7 12h6",
+  checklist: "M9 5h11M9 12h11M9 19h11M3 5l1 1 2-3M3 12l1 1 2-3M3 19l1 1 2-3",
+  chart: "M4 3v17h17M8 15v-4M13 15V7M18 15V4",
+  shield: "M12 3 3 6v6c0 5 9 9 9 9s9-4 9-9V6L12 3ZM8 12l3 3 5-6",
+  settings:
+    "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM9 3h6l1 3 3 1 2 4v2l-2 4-3 1-1 3H9l-1-3-3-1-2-4v-2l2-4 3-1 1-3Z",
+  download: "M12 3v12M7 10l5 5 5-5M4 17v4h16v-4",
+  upload: "M12 16V4M7 9l5-5 5 5M4 17v4h16v-4",
+  sparkle: "m12 3 2.7 6.3L21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7L12 3Z",
+  search: "M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM15 15l6 6",
+  refresh: "M20 7a9 9 0 0 0-15-2L2 8m0-5v5h5M4 17a9 9 0 0 0 15 2l3-3m0 5v-5h-5",
+  check: "m5 12 4 4L19 6",
+  close: "m6 6 12 12M18 6 6 18",
+  clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v5l3 2",
+  link: "m10 8 3-3a4 4 0 0 1 6 6l-3 3M14 16l-3 3a4 4 0 0 1-6-6l3-3M8 16l8-8",
+  phone:
+    "M5 3h4l2 5-3 2c1 3 3 5 6 6l2-3 5 2v4c0 2-3 3-5 2A22 22 0 0 1 3 8c-1-2 0-5 2-5Z",
+  flag: "M5 21V3c5-3 9 3 14 0v10c-5 3-9-3-14 0",
+  arrow: "M5 12h14m-5-5 5 5-5 5",
+  plus: "M12 5v14M5 12h14",
+  file: "M6 3h8l4 4v14H6V3Zm8 0v5h4M9 12h6M9 16h6",
+  info: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 11v6M12 7v1",
+};
+const icon = (name, cls = "") =>
+  `<svg class="${esc(cls)}" viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name] || paths.info}"></path></svg>`;
+document
+  .querySelectorAll("[data-icon]")
+  .forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
+let state = { records: [], checklist: null, open_appeals: 0 },
+  settings = {},
+  selected = null,
+  detail = null,
+  view = "dialogs",
+  busy = false,
+  draft = null,
+  toastTimer;
+const fmt = (value) =>
+  value == null
+    ? "—"
+    : Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+const roles = {
+  operator: "Оператор",
+  client: "Клиент",
+  bot: "AI-ассистент",
+  system: "Событие",
+};
+async function api(path, body) {
+  const response = await fetch(
+    "/api/" + path,
+    body === undefined
+      ? {}
+      : {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+  );
+  const data = await response.json();
+  if (!response.ok)
+    throw new Error(data.error || "Не удалось выполнить запрос");
+  return data;
+}
+function toast(message, error = false) {
+  const node = $("#toast");
+  node.textContent = message;
+  node.className = "toast show" + (error ? " error" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => node.classList.remove("show"), 5500);
+}
+function fail(error) {
+  toast(error.message || String(error), true);
+}
+function modelName() {
+  return settings.provider === "rules"
+    ? "Проверка правил"
+    : settings.model || "Модель не выбрана";
+}
+async function refresh() {
+  state = await api("state");
+  renderStats();
+  renderBanner();
+  renderList();
+  if (view === "analytics") renderAnalytics();
+}
+function renderStats() {
+  const totals = state.records.filter((r) => r.score != null),
+    evaluated = state.records.filter((r) => r.evaluated),
+    calls = state.records.filter((r) => r.channel === "voice call").length;
+  const average = totals.length
+    ? totals.reduce((s, r) => s + r.score, 0) / totals.length
+    : null;
+  const stats = [
+    [
+      "Всего диалогов",
+      state.records.length,
+      `${state.records.length - calls} чатов · ${calls} звонков`,
+      "messages",
+    ],
+    [
+      "Есть итоговая оценка",
+      totals.length,
+      `${evaluated.length - totals.length} черновиков на пересмотр`,
+      "checklist",
+    ],
+    [
+      "Средний итоговый балл",
+      fmt(average),
+      totals.length
+        ? `По ${totals.length} полным оценкам`
+        : "Появится после полной оценки",
+      "chart",
+    ],
+    [
+      "Открытые апелляции",
+      state.open_appeals,
+      "Решения сохраняются в истории",
+      "shield",
+    ],
+  ];
+  $("#stats").innerHTML = stats
+    .map(
+      ([label, value, note, image]) =>
+        `<article class="stat"><div><div class="stat-label">${esc(label)}</div><div class="stat-value">${esc(value)}${label.includes("балл") && average != null ? "<small>/ 100</small>" : ""}</div><div class="stat-note">${esc(note)}</div></div><div class="stat-icon">${icon(image)}</div></article>`,
+    )
+    .join("");
+  $("#nav-count").textContent = state.records.length;
+}
+function renderBanner() {
+  $("#model-banner").innerHTML =
+    settings.provider === "rules"
+      ? `${icon("info")}<span><strong>Режим проверки правил.</strong> Смысловые критерии требуют модели или пересмотра человеком. Неполные оценки не входят в средний балл.</span><button data-action="settings">Подключить AI ${icon("arrow")}</button>`
+      : `${icon("sparkle")}<span><strong>${esc(modelName())}</strong> · результаты проходят проверку допустимых оценок и точности цитат.</span><button data-action="settings">Настроить</button>`;
+}
+function filtered() {
+  const search = $("#search").value.trim().toLowerCase(),
+    lang = $("#language").value,
+    channel = $("#channel").value,
+    status = $("#status").value;
+  return state.records.filter(
+    (r) =>
+      (!search ||
+        (r.conversation_id + " " + r.preview).toLowerCase().includes(search)) &&
+      (!lang || r.language === lang) &&
+      (!channel || r.channel === channel) &&
+      (!status ||
+        (status === "new" && !r.evaluated) ||
+        (status === "done" && r.score != null) ||
+        (status === "review" && r.evaluated && r.needs_review > 0) ||
+        (status === "gross" && r.gross_error)),
+  );
+}
+function renderList() {
+  const records = filtered();
+  $("#filtered-count").textContent = records.length;
+  $("#conversation-list").innerHTML = records.length
+    ? records
+        .map(
+          (r) =>
+            `<button class="conversation-item ${r.conversation_id === selected ? "selected" : ""}" data-action="select" data-id="${esc(r.conversation_id)}" aria-pressed="${r.conversation_id === selected}"><div class="conv-top"><span class="conv-id">${esc(r.conversation_id)}</span><span class="conv-language">${esc(r.language)}</span><span class="conv-icon">${icon(r.channel === "voice call" ? "phone" : "messages")}</span></div><div class="conv-preview">${esc(r.preview)}</div><div class="conv-bottom"><span class="conv-state ${r.score != null ? "done" : ""}">${r.stale ? "Чек-лист изменён" : r.evaluated ? (r.score != null ? "Есть итог" : "Черновик") : "Новый диалог"}</span><span class="conv-score ${r.gross_error ? "alert" : ""}">${r.gross_error ? "⚑ " : ""}${r.score != null ? fmt(r.score) + "/100" : r.messages + " реплик"}</span></div></button>`,
+        )
+        .join("")
+    : '<div class="empty-state"><p>Нет диалогов по выбранным фильтрам.</p></div>';
+}
+async function selectConversation(id) {
+  selected = id;
+  renderList();
+  $("#transcript-panel").classList.add("loading");
+  try {
+    detail = await api("conversations/" + encodeURIComponent(id));
+    renderDetail();
+    history.replaceState(null, "", "#" + encodeURIComponent(id));
+  } finally {
+    $("#transcript-panel").classList.remove("loading");
+  }
+}
+function safeUrl(value) {
+  try {
+    const u = new URL(value);
+    return ["https:", "http:"].includes(u.protocol) ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+function renderDetail() {
+  if (!detail) return;
+  renderTranscript();
+  renderResults();
+}
+let showContext = true;
+function renderTranscript() {
+  const r = detail.record,
+    e = detail.evaluation,
+    url = safeUrl(r.audio_url);
+  $("#transcript-panel").innerHTML =
+    `<div class="transcript-heading"><span class="channel-avatar">${icon(r.channel === "voice call" ? "phone" : "messages")}</span><div><h2>${esc(r.conversation_id)}</h2><p>${r.channel === "voice call" ? "Телефонный разговор" : "Переписка с поддержкой"} · ${esc(r.language)} · ${r.transcript.length} реплик</p></div><div class="transcript-actions"><span class="badge green">${esc(detail.dataset_group || "DEV")}</span></div></div>${url ? `<div class="audio-box"><audio id="audio-player" controls preload="none" src="${esc(url)}"></audio><a href="${esc(url)}" target="_blank" rel="noreferrer">Открыть запись отдельно ↗</a><p>Метки ISO сохранены. Точка отсчёта аудио не подтверждена; точный переход к секунде записи требует проверки.</p></div>` : ""}<div class="transcript-tools"><span>Исходный транскрипт</span><label class="toggle"><input type="checkbox" id="context-toggle" ${showContext ? "checked" : ""}>Бот и события</label></div><div class="transcript-messages" id="messages">${r.transcript
+      .map((t, i) => ({ t, i }))
+      .filter(({ t }) => showContext || !["bot", "system"].includes(t.speaker))
+      .map(
+        ({ t, i }) =>
+          `<article class="message ${esc(t.speaker)}" id="message-${i + 1}">${t.speaker !== "system" ? `<div class="message-header"><span class="message-role">${roles[t.speaker] || esc(t.speaker)}</span><span>${esc(t.timestamp)}</span><span class="message-num">#${i + 1}</span></div>` : ""}<div class="message-body">${t.speaker === "system" ? `${esc(t.timestamp)} · ` : ""}${esc(t.text)}</div></article>`,
+      )
+      .join(
+        "",
+      )}<div class="transcript-end">Конец предоставленного транскрипта</div></div>`;
+}
+function renderResults() {
+  const r = detail.record,
+    e = detail.evaluation;
+  if (!e) {
+    $("#results-panel").innerHTML =
+      `<div class="results-header"><h2>Оценка диалога</h2><span class="badge">Не проверен</span></div><div class="empty-state">${icon("sparkle")}<h3>От разговора к выводам</h3><p>Запустите проверку по текущему чек-листу. Для каждого вывода будет показано объяснение и основание.</p><button class="button primary" data-action="evaluate" ${busy ? "disabled" : ""}>${icon(busy ? "refresh" : "sparkle", busy ? "spinner" : "")}${busy ? "Проверяем…" : "Проверить диалог"}</button><span class="badge">${esc(modelName())} · v${state.checklist.version}</span></div>`;
+    return;
+  }
+  const s = e.final_score,
+    unknown = e.answers.filter((a) => a.value == null).length,
+    grossUnknown = e.checklist.criteria.some(
+      (c) =>
+        c.is_gross &&
+        e.answers.find((a) => a.criterion_id === c.id)?.value == null,
+    );
+  $("#results-panel").innerHTML =
+    `<div class="results-header"><h2>Оценка диалога</h2><span class="badge ${s.complete ? "green" : "amber"}">${s.complete ? "С итогом" : "На пересмотр"}</span></div>${e.checklist.version !== detail.current_version ? '<div class="stale-note">Чек-лист изменён. Оценка сохранена по версии ' + e.checklist.version + ". Запустите новую проверку.</div>" : ""}<div class="result-scroll"><div class="score-block"><div class="score-line"><div><div class="score-number">${fmt(s.total)} <small>/ 100</small></div><div class="score-caption">${s.complete ? "Итог с учётом решений проверяющего" : `Осталось оценить ${unknown} из ${e.answers.length} критериев`}</div></div><div class="score-annotation"><strong>${e.meta.provider === "rules" ? "Черновая проверка" : esc(e.meta.model)}</strong>${s.gross_error ? '<span class="badge red">Грубая ошибка</span>' : grossUnknown ? "Грубые ошибки: не проверены" : "Грубые ошибки: нет"}</div></div><progress max="100" value="${s.total ?? 0}" aria-label="Итоговый балл"></progress><div class="score-footnote"><span>Чек-лист v${e.checklist.version}</span><span>${s.complete ? `Применимый вес: ${fmt(s.applicable_weight)}` : "Неполная оценка не суммируется"}</span></div>${e.original_score.total !== s.total ? `<div class="review-note">Исходная оценка: ${fmt(e.original_score.total)} → после пересмотра: ${fmt(s.total)}</div>` : ""}</div>${renderSectionScores(s)}<div class="criteria-heading"><strong>Критерии оценки</strong><span>${e.answers.length} критериев</span></div>${e.checklist.criteria
+      .map((c) =>
+        criterionCard(
+          c,
+          e.answers.find((a) => a.criterion_id === c.id),
+          e,
+        ),
+      )
+      .join(
+        "",
+      )}${renderHistory(e)}</div><div class="results-bottom"><span>${e.meta.calls || 0} вызовов · ${e.meta.elapsed_seconds || 0} с${e.meta.cost_usd != null ? " · $" + e.meta.cost_usd.toFixed(5) : ""}</span><button class="button text" data-action="evaluate" ${busy ? "disabled" : ""}>${icon("refresh", busy ? "spinner" : "")}${busy ? "Проверяем…" : "Проверить заново"}</button></div>`;
+}
+function renderSectionScores(s) {
+  return `<div class="section-scores">${Object.entries(s.sections)
+    .map(
+      ([name, value]) =>
+        `<div class="section-score"><span>${esc(name)}</span><strong>${fmt(value)}</strong></div>`,
+    )
+    .join("")}</div>`;
+}
+function criterionCard(c, a, e) {
+  if (!a) return "";
+  const pending = a.value == null,
+    no =
+      (a.value === "Нет" && !c.is_gross) ||
+      (a.value === "Да" && c.is_gross) ||
+      a.value === 0;
+  const appeals = e.appeals.filter((p) => p.criterion_id === c.id);
+  return `<article class="criterion"><div class="criterion-top"><span class="criterion-dot ${pending ? "pending" : no ? "no" : ""}">${icon(pending ? "clock" : no ? "close" : "check")}</span><span class="criterion-name">${esc(c.name)}</span><span class="criterion-value ${no ? "no" : ""}">${pending ? "Не оценён" : esc(a.value)}${typeof a.value === "number" ? " / " + c.scale_max : ""}<small class="criterion-weight">${c.is_gross ? "Отдельный флаг" : "Вес " + c.weight}</small></span></div><p class="criterion-reason">${esc(a.reason)}</p>${a.evidence.map((ev) => `<button class="evidence-link" data-action="evidence" data-index="${ev.message_index}" data-end="${ev.end_message_index || ev.message_index}" aria-label="Перейти к сообщению ${ev.message_index}">${icon("link")}<span class="evidence-quote">#${ev.message_index}${ev.end_message_index > ev.message_index ? "–" + ev.end_message_index : ""} · «${esc(ev.quote)}»</span></button>`).join("")}${a.review_reason ? `<div class="review-note">${icon("shield")} Решение проверяющего: ${esc(a.review_reason)}</div>` : ""}${appeals
+    .filter((p) => p.status === "open")
+    .map(
+      (p) =>
+        `<div class="appeal-card"><strong>Открытая апелляция</strong><p>${esc(p.comment)}</p><button class="button secondary small" data-action="resolve" data-id="${p.id}">Рассмотреть</button></div>`,
+    )
+    .join(
+      "",
+    )}<div class="criterion-footer"><span>${a.review_reason ? "Решение проверяющего" : a.needs_review ? "Нужна проверка" : "Цитата проверена по транскрипту"}</span><button class="appeal-button" data-action="appeal" data-id="${c.id}">${pending ? "Заполнить при пересмотре" : "Оспорить оценку"}</button></div></article>`;
+}
+function renderHistory(e) {
+  return `<div class="section-card"><details><summary>История решений · ${e.appeals.length}</summary><div class="timeline">${e.appeals.length ? e.appeals.map((a) => `<div class="timeline-item"><strong>Критерий ${a.criterion_id} · ${a.status === "open" ? "Апелляция открыта" : "Решение сохранено"}</strong>${esc(a.comment)}${a.reason ? `<br>Решение: ${esc(a.value ? JSON.parse(a.value) : "")} · ${esc(a.reason)}` : ""}<br><small>${esc(new Date(a.created_at).toLocaleString("ru-RU"))}</small></div>`).join("") : "<p>Решений пока нет.</p>"}</div></details>${detail.history.length ? `<details><summary>Предыдущие проверки · ${detail.history.length}</summary>${detail.history.map((h) => `<p>Проверка #${h.id} · v${h.checklist.version} · ${esc(h.meta.model)} · ${fmt(h.final_score.total)}/100</p>`).join("")}</details>` : ""}</div>`;
+}
+function jumpEvidence(index, end) {
+  if (!showContext) {
+    showContext = true;
+    renderTranscript();
+  }
+  document
+    .querySelectorAll(".message.highlight")
+    .forEach((n) => n.classList.remove("highlight"));
+  for (let i = index; i <= end; i++)
+    $("#message-" + i)?.classList.add("highlight");
+  const message = $("#message-" + index);
+  const pane = $("#messages");
+  if (message && pane) {
+    const offset = message.getBoundingClientRect().top - pane.getBoundingClientRect().top;
+    pane.scrollTo({ top: pane.scrollTop + offset - pane.clientHeight / 3, behavior: "smooth" });
+  }
+}
+async function evaluateSelected() {
+  if (!selected || busy) return;
+  busy = true;
+  renderResults();
+  try {
+    await api("evaluate/" + encodeURIComponent(selected), {});
+    await refresh();
+    await selectConversation(selected);
+    toast(
+      settings.provider === "rules"
+        ? "Черновик правил готов. Смысловые критерии ожидают оценки."
+        : "Оценка сохранена. Все ссылки на цитаты проверены.",
+    );
+  } finally {
+    busy = false;
+    renderResults();
+  }
+}
+async function batch() {
+  if (busy) return;
+  const records = filtered();
+  if (!records.length) return toast("Нет диалогов для проверки");
+  busy = true;
+  let done = 0,
+    errors = 0;
+  const label = $("#batch-label");
+  try {
+    for (const r of records) {
+      label.textContent = `${done + errors + 1} / ${records.length}`;
+      try {
+        await api("evaluate/" + encodeURIComponent(r.conversation_id), {});
+        done++;
+      } catch (e) {
+        errors++;
+        if (settings.provider !== "rules") {
+          fail(e);
+          break;
+        }
+      }
+    }
+    await refresh();
+    if (selected) await selectConversation(selected);
+    toast(`Сохранено проверок: ${done}${errors ? ". Ошибок: " + errors : ""}`);
+  } finally {
+    busy = false;
+    label.textContent = "Проверить выборку";
+    renderResults();
+  }
+}
+function switchView(next) {
+  view = next;
+  document
+    .querySelectorAll(".view")
+    .forEach((el) => el.classList.toggle("active", el.id === "view-" + next));
+  document
+    .querySelectorAll("[data-view]")
+    .forEach((el) => el.classList.toggle("active", el.dataset.view === next));
+  const titles = {
+    dialogs: [
+      "Диалоги",
+      "Качество начинается с диалога",
+      "Оценивайте работу оператора. Проверяйте доказательства. Принимайте взвешенные решения.",
+    ],
+    checklist: [
+      "Чек-лист",
+      "Правила, которые можно изменить",
+      "Настройте критерии и сохраните новую версию. Предыдущие оценки останутся в истории.",
+    ],
+    analytics: [
+      "Обзор качества",
+      "Видеть общую картину",
+      "Результаты проверок, открытые апелляции и прозрачная история решений.",
+    ],
+  };
+  $("#breadcrumb").textContent = titles[next][0];
+  $("#page-title").innerHTML = esc(titles[next][1]) + "<span>.</span>";
+  $("#page-description").textContent = titles[next][2];
+  $(".heading-actions").classList.toggle("hidden", next !== "dialogs");
+  if (next === "checklist") {
+    draft = structuredClone(state.checklist);
+    renderChecklist();
+  }
+  if (next === "analytics") renderAnalytics();
+}
+function renderChecklist() {
+  if (!draft) return;
+  $("#view-checklist").innerHTML =
+    `<div class="section-card"><div class="editor-header"><div><input id="checklist-name" aria-label="Название чек-листа" value="${esc(draft.name)}"><span class="badge">Текущая версия: ${draft.version}</span></div><div class="editor-actions"><button class="button secondary" data-action="add-criterion">${icon("plus")}Добавить критерий</button><button class="button primary" data-action="save-checklist">${icon("check")}Сохранить версию</button></div></div><div class="editor-grid">${draft.criteria.map((c) => `<article class="criterion-editor" data-criterion="${c.id}"><div class="criterion-editor-head"><strong>КРИТЕРИЙ ${c.id}</strong><button class="icon-button" data-action="remove-criterion" data-id="${c.id}" aria-label="Удалить критерий ${c.id}">${icon("close")}</button></div><label class="field">Название<input data-field="name" value="${esc(c.name)}"></label><label class="field">Правило оценки и условие N/A<textarea data-field="description" rows="4">${esc(c.description)}</textarea></label><div class="form-row"><label class="field">Вес<input data-field="weight" type="number" min="0" max="100" step="0.5" value="${c.weight}"></label><label class="field">Ответы через запятую<input data-field="allowed" value="${esc(c.allowed_values.join(", "))}"><small>Да, Нет, N/A или 0, 5, 10, 15, 20</small></label></div><label class="field">Секция<input data-field="section" value="${esc(c.section || "Общее")}"></label><label class="toggle"><input type="checkbox" data-field="is_gross" ${c.is_gross ? "checked" : ""}>Отдельный флаг грубой ошибки (вес 0)</label></article>`).join("")}</div><div class="editor-foot">${icon("info")}Вес N/A пропорционально перераспределяется. Обновлённый критерий применяется при новой проверке.</div></div>`;
+}
+function collectChecklist() {
+  draft.name = $("#checklist-name").value.trim();
+  document.querySelectorAll("[data-criterion]").forEach((node) => {
+    const c = draft.criteria.find(
+      (c) => c.id === Number(node.dataset.criterion),
+    );
+    for (const field of ["name", "description", "section"])
+      c[field] = node.querySelector(`[data-field="${field}"]`).value.trim();
+    c.weight = Number(node.querySelector('[data-field="weight"]').value);
+    c.is_gross = node.querySelector('[data-field="is_gross"]').checked;
+    c.allowed_values = node
+      .querySelector('[data-field="allowed"]')
+      .value.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => (/^\d+(\.\d+)?$/.test(s) ? Number(s) : s));
+    const nums = c.allowed_values.filter((v) => typeof v === "number");
+    c.scale_max = nums.length ? Math.max(...nums) : null;
+  });
+  return draft;
+}
+async function saveChecklist() {
+  collectChecklist();
+  await api("checklist", draft);
+  await refresh();
+  draft = structuredClone(state.checklist);
+  renderChecklist();
+  if (selected) {
+    detail = await api("conversations/" + encodeURIComponent(selected));
+    renderDetail();
+  }
+  toast("Новая версия сохранена. Примените её новой проверкой диалога.");
+}
+function renderAnalytics() {
+  const totals = state.records.filter((r) => r.score != null),
+    evaluated = state.records.filter((r) => r.evaluated);
+  $("#view-analytics").innerHTML = `<div class="analytics-grid">${[
+    "RU",
+    "KZ",
+    "EN",
+  ]
+    .map((lang) => {
+      const records = state.records.filter((r) => r.language === lang),
+        scored = records.filter((r) => r.score != null);
+      return `<article class="section-card"><span class="badge">${lang}</span><h2>${scored.length ? fmt(scored.reduce((n, r) => n + r.score, 0) / scored.length) : "—"} <small>/ 100</small></h2><p>${records.length} диалогов · ${scored.length} полных оценок</p></article>`;
+    })
+    .join(
+      "",
+    )}</div><div class="section-card"><h2>Результаты проверок</h2><p>Средние баллы учитывают только полные оценки. Это результаты системы и пересмотров, а не измерение точности относительно эталона жюри.</p><div class="table-scroll"><table class="data-table"><thead><tr><th>ДИАЛОГ</th><th>ЯЗЫК</th><th>РЕЖИМ</th><th>ИТОГ</th><th>ПРОВЕРКА</th><th></th></tr></thead><tbody>${evaluated.length ? evaluated.map((r) => `<tr><td>${esc(r.conversation_id)}</td><td>${r.language}</td><td>${r.provider === "rules" ? "Правила" : "AI-модель"}</td><td>${fmt(r.score)}</td><td>${r.gross_error ? '<span class="badge red">Грубая ошибка</span>' : r.needs_review ? "На пересмотр" : "Есть итог"}</td><td><button data-action="open-result" data-id="${esc(r.conversation_id)}">Открыть ↗</button></td></tr>`).join("") : '<tr><td colspan="6">Результатов пока нет. Начните с проверки одного диалога.</td></tr>'}</tbody></table></div></div>`;
+}
+function modal(title, body, footer = "") {
+  const dialog = $("#modal");
+  $("#modal-content").innerHTML =
+    `<div class="modal-heading"><h2>${esc(title)}</h2><button class="icon-button" data-action="close-modal" aria-label="Закрыть">${icon("close")}</button></div><div class="modal-body">${body}<div id="modal-error" class="modal-error" role="alert"></div></div>${footer ? `<div class="modal-footer">${footer}</div>` : ""}`;
+  dialog.showModal();
+}
+async function settingsModal() {
+  settings = await api("settings");
+  modal(
+    "Подключение модели",
+    `<p>Ключ используется только сервером и хранится в памяти до его перезапуска. В экспорт и базу данных он не попадает.</p><form id="settings-form"><label class="field">Провайдер<select id="provider">${[
+      ["rules", "Проверка правил — без модели"],
+      ["gemini", "Gemini · Google AI Studio"],
+      ["openai", "OpenAI Responses API"],
+      ["compatible", "Совместимый Chat Completions API"],
+      ["ollama", "Локальная модель · Ollama"],
+    ]
+      .map(
+        ([v, n]) =>
+          `<option value="${v}" ${settings.provider === v ? "selected" : ""}>${n}</option>`,
+      )
+      .join(
+        "",
+      )}</select></label><label class="field">Базовый URL<input id="base-url" type="url" required value="${esc(settings.base_url)}"></label><label class="field">Название модели<input id="model-name" placeholder="Точное имя модели у провайдера" value="${esc(settings.model)}"></label><label class="field">API-ключ<input id="api-key" type="password" autocomplete="off" placeholder="${settings.key_configured ? "Ключ уже задан; оставьте пустым для сохранения" : "Ключ доступа к модели"}"><small>Для локальной Ollama ключ обычно не нужен.</small></label><div class="form-row"><label class="field">Вход, $ за 1 млн токенов<input id="input-price" type="number" min="0" step="0.001" value="${settings.input_price ?? ""}" placeholder="Неизвестно"></label><label class="field">Выход, $ за 1 млн токенов<input id="output-price" type="number" min="0" step="0.001" value="${settings.output_price ?? ""}" placeholder="Неизвестно"></label></div><div class="form-help">Облачная модель получает текст выбранного диалога и чек-лист при запуске проверки. Без настроенной модели доступны черновые правила и ручной пересмотр.</div></form>`,
+    `<button class="button secondary" data-action="close-modal">Отмена</button><button class="button primary" data-action="save-settings">Сохранить настройки</button>`,
+  );
+}
+async function saveSettings() {
+  const body = {
+    provider: $("#provider").value,
+    base_url: $("#base-url").value.trim(),
+    model: $("#model-name").value.trim(),
+    input_price:
+      $("#input-price").value === "" ? null : Number($("#input-price").value),
+    output_price:
+      $("#output-price").value === "" ? null : Number($("#output-price").value),
+  };
+  const key = $("#api-key").value.trim();
+  if (key) body.api_key = key;
+  settings = await api("settings", body);
+  $("#api-key").value = "";
+  $("#modal").close();
+  renderBanner();
+  if (detail) renderResults();
+  toast("Настройки сохранены");
+}
+function importModal() {
+  modal(
+    "Загрузить диалоги",
+    `<div class="form-row"><label class="field">Группа API организаторов<input id="dataset-group" value="DEV" placeholder="DEV или group_id контроля"></label><button class="button secondary small" data-action="sync-group">Получить через API</button></div><p>Для контроля введите group_id, который сообщат организаторы. Или загрузите ответ API файлом / текстом.</p><label class="field">Файл JSON<input id="import-file" type="file" accept=".json,application/json"></label><label class="field">Ответ API<textarea id="import-json" rows="5" placeholder='{"data":{"records":[...]}}'></textarea></label>`,
+    `<button class="button secondary" data-action="close-modal">Отмена</button><button class="button primary" data-action="do-import">Загрузить JSON</button>`,
+  );
+}
+async function doImport() {
+  let raw = $("#import-json").value;
+  const f = $("#import-file").files[0];
+  if (f) {
+    if (f.size > 15_000_000) throw new Error("Файл больше 15 МБ");
+    raw = await f.text();
+  }
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    throw new Error("Не удалось прочитать JSON");
+  }
+  const result = await api("import", payload);
+  $("#modal").close();
+  await refresh();
+  if (!selected && state.records.length)
+    await selectConversation(state.records[0].conversation_id);
+  toast(`Загружено диалогов: ${result.imported}`);
+}
+async function syncGroup() {
+  const group = $("#dataset-group").value.trim();
+  const button = document.querySelector('[data-action="sync-group"]');
+  button.disabled = true;
+  try {
+    const result = await api("sync", { group_id: group });
+    $("#modal").close();
+    await refresh();
+    toast(`Группа ${group}: загружено ${result.imported} диалогов`);
+  } finally {
+    button.disabled = false;
+  }
+}
+function appealModal(cid) {
+  const e = detail.evaluation,
+    c = e.checklist.criteria.find((c) => c.id === cid),
+    a = e.answers.find((a) => a.criterion_id === cid);
+  modal(
+    a.value == null ? "Передать на ручную оценку" : "Апелляция по критерию",
+    `<div class="read-only"><strong>${esc(c.name)}</strong><br>Текущая оценка: ${a.value == null ? "Не определена" : esc(a.value)}<br>${esc(a.reason)}</div><label class="field">Комментарий<textarea id="appeal-comment" rows="4" placeholder="Что нужно проверить и на какие реплики обратить внимание?" maxlength="5000"></textarea></label>`,
+    `<button class="button secondary" data-action="close-modal">Отмена</button><button class="button primary" data-action="submit-appeal" data-id="${cid}">Сохранить обращение</button>`,
+  );
+}
+async function submitAppeal(cid) {
+  await api("appeals", {
+    evaluation_id: detail.evaluation.id,
+    criterion_id: cid,
+    comment: $("#appeal-comment").value,
+  });
+  $("#modal").close();
+  await refresh();
+  await selectConversation(selected);
+  toast("Апелляция сохранена. Проверяющий может принять решение.");
+}
+function resolveModal(aid) {
+  const e = detail.evaluation,
+    a = e.appeals.find((a) => a.id === aid),
+    c = e.checklist.criteria.find((c) => c.id === a.criterion_id),
+    answer = e.answers.find((x) => x.criterion_id === c.id);
+  modal(
+    "Решение проверяющего",
+    `<div class="read-only"><strong>${esc(c.name)}</strong><br>${esc(c.description)}<br><br>Обращение: ${esc(a.comment)}<br>Исходная оценка: ${answer.value == null ? "Не определена" : esc(answer.value)}</div><label class="field">Подтвердить или изменить оценку<select id="resolve-value">${c.allowed_values.map((v, i) => `<option value="${i}" ${v === answer.value ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label><label class="field">Причина решения<textarea id="resolve-reason" rows="4" placeholder="Объясните решение и укажите номера реплик" maxlength="5000"></textarea></label>`,
+    `<button class="button secondary" data-action="close-modal">Отмена</button><button class="button primary" data-action="submit-resolve" data-id="${aid}">Сохранить решение</button>`,
+  );
+}
+async function submitResolve(aid) {
+  const e = detail.evaluation,
+    a = e.appeals.find((a) => a.id === aid),
+    c = e.checklist.criteria.find((c) => c.id === a.criterion_id);
+  await api(`appeals/${aid}/resolve`, {
+    value: c.allowed_values[Number($("#resolve-value").value)],
+    reason: $("#resolve-reason").value,
+  });
+  $("#modal").close();
+  await refresh();
+  await selectConversation(selected);
+  toast("Решение сохранено. Итог пересчитан, исходная оценка сохранена.");
+}
+async function exportResults() {
+  const data = await api("export");
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    }),
+    url = URL.createObjectURL(blob),
+    a = document.createElement("a");
+  a.href = url;
+  a.download = "cqa-results-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("Результаты и история выгружены в JSON");
+}
+document.addEventListener("click", async (event) => {
+  const nav = event.target.closest("[data-view]");
+  if (nav) {
+    switchView(nav.dataset.view);
+    return;
+  }
+  const button = event.target.closest("[data-action]");
+  if (!button || button.disabled) return;
+  const action = button.dataset.action;
+  try {
+    switch (action) {
+      case "select":
+        await selectConversation(button.dataset.id);
+        break;
+      case "open-result":
+        switchView("dialogs");
+        await selectConversation(button.dataset.id);
+        break;
+      case "evaluate":
+        await evaluateSelected();
+        break;
+      case "batch":
+        await batch();
+        break;
+      case "evidence":
+        jumpEvidence(Number(button.dataset.index), Number(button.dataset.end));
+        break;
+      case "settings":
+        await settingsModal();
+        break;
+      case "save-settings":
+        await saveSettings();
+        break;
+      case "close-modal":
+        $("#modal").close();
+        break;
+      case "import":
+        importModal();
+        break;
+      case "do-import":
+        await doImport();
+        break;
+      case "sync-group":
+        await syncGroup();
+        break;
+      case "sync":
+        button.disabled = true;
+        try {
+          const result = await api("sync", {});
+          await refresh();
+          toast(`API: получено ${result.imported} диалогов`);
+        } finally {
+          button.disabled = false;
+        }
+        break;
+      case "export":
+        await exportResults();
+        break;
+      case "appeal":
+        appealModal(Number(button.dataset.id));
+        break;
+      case "submit-appeal":
+        await submitAppeal(Number(button.dataset.id));
+        break;
+      case "resolve":
+        resolveModal(Number(button.dataset.id));
+        break;
+      case "submit-resolve":
+        await submitResolve(Number(button.dataset.id));
+        break;
+      case "save-checklist":
+        await saveChecklist();
+        break;
+      case "add-criterion":
+        collectChecklist();
+        draft.criteria.push({
+          id: Math.max(0, ...draft.criteria.map((c) => c.id)) + 1,
+          name: "Новый критерий",
+          description:
+            "Опишите, что считать выполнением критерия и когда он неприменим.",
+          weight: 10,
+          scale_max: null,
+          allowed_values: ["Да", "Нет"],
+          section: "Дополнительные критерии",
+          is_gross: false,
+        });
+        renderChecklist();
+        break;
+      case "remove-criterion":
+        collectChecklist();
+        draft.criteria = draft.criteria.filter(
+          (c) => c.id !== Number(button.dataset.id),
+        );
+        renderChecklist();
+        break;
+    }
+  } catch (error) {
+    const target = $("#modal[open] #modal-error");
+    if (target) target.textContent = error.message;
+    else fail(error);
+  }
+});
+document.addEventListener("change", (event) => {
+  if (["language", "channel", "status"].includes(event.target.id)) renderList();
+  if (event.target.id === "context-toggle") {
+    showContext = event.target.checked;
+    renderTranscript();
+  }
+  if (event.target.id === "provider") {
+    const value = event.target.value;
+    if (value === "gemini") $("#model-name").value = "gemini-3.8-flash";
+    $("#base-url").value =
+      value === "gemini"
+        ? "https://generativelanguage.googleapis.com/v1beta/openai"
+        : value === "ollama"
+          ? "http://127.0.0.1:11434"
+          : value === "openai"
+            ? "https://api.openai.com/v1"
+            : value === "compatible"
+              ? "https://api.example.com/v1"
+              : $("#base-url").value;
+  }
+});
+$("#search").addEventListener("input", renderList);
+$("#modal").addEventListener("click", (event) => {
+  if (event.target === $("#modal")) $("#modal").close();
+});
+async function init() {
+  try {
+    [state, settings] = await Promise.all([api("state"), api("settings")]);
+    renderStats();
+    renderBanner();
+    renderList();
+    const hash = decodeURIComponent(location.hash.slice(1));
+    const id = state.records.some((r) => r.conversation_id === hash)
+      ? hash
+      : state.records[0]?.conversation_id;
+    if (id) await selectConversation(id);
+  } catch (error) {
+    fail(error);
+    $("#transcript-panel").innerHTML =
+      '<div class="empty-state"><h3>Не удалось загрузить данные</h3><p>Проверьте, что сервер запущен, и обновите страницу.</p></div>';
+  }
+}
+init();

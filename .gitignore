@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+data/
+research/dev.json
+research/reference_draft.json
+research/reference_review.md
+research/selected_transcripts.md
+research/experiment/requests.jsonl
+research/experiment/*results.json
+research/experiment/data_audit.json
+research/experiment/frozen_manifest.json
+research/*.png
+research/checklist_config.json
+*.log

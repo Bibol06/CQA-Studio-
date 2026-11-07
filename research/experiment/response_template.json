@@ -1,0 +1,14 @@
+{
+  "request_id": "p1-ru-022__B",
+  "elapsed_seconds": null,
+  "model": "fill_actual_model",
+  "usage": {
+    "input_tokens": null,
+    "output_tokens": null
+  },
+  "response": {
+    "conversation_id": "p1-ru-022",
+    "criteria": []
+  },
+  "note": "TEMPLATE ONLY; fill all eight actual model answers; not a result"
+}
