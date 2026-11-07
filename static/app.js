@@ -48,6 +48,7 @@ let state = { records: [], checklist: null, open_appeals: 0 },
   toastTimer;
 let jobsState = { jobs: [], counts: {} },
   jobsHash = "",
+  jobsConnectionError = null,
   pollBusy = false,
   needsDetailRefresh = false,
   pendingBatch = [];
@@ -442,11 +443,13 @@ function activeJob() {
 }
 function renderQueueBanner() {
   const c = jobsState.counts,
-    active = (c.queued || 0) + (c.running || 0) + (c.waiting_key || 0);
+    active = (c.queued || 0) + (c.running || 0) + (c.waiting_key || 0),
+    problem = queueProblem();
   $("#queue-count").textContent = active;
-  $("#queue-banner").classList.toggle("hidden", !active);
+  $("#queue-banner").classList.toggle("hidden", !active && !problem);
+  $("#queue-banner").classList.toggle("queue-warning", !!problem);
   $("#queue-banner").innerHTML =
-    `${icon(c.running ? "refresh" : "clock", c.running ? "spinner" : "")}<span>В работе: <strong>${c.running || 0}</strong> · ожидают: <strong>${c.queued || 0}</strong> · нужен ключ: <strong>${c.waiting_key || 0}</strong></span><button class="button text" data-view="queue">Открыть очередь →</button>`;
+    `${icon(problem ? "info" : c.running ? "refresh" : "clock", c.running ? "spinner" : "")}<span>${problem ? esc(problem) : `В работе: <strong>${c.running || 0}</strong> · ожидают: <strong>${c.queued || 0}</strong> · нужен ключ: <strong>${c.waiting_key || 0}</strong>`}</span><button class="button text" data-view="queue">Открыть очередь →</button>`;
   if (detail) {
     const job = activeJob();
     document.querySelectorAll('[data-action="evaluate"]').forEach((b) => {
@@ -455,18 +458,41 @@ function renderQueueBanner() {
     });
   }
 }
+function queueProblem() {
+  if (jobsConnectionError)
+    return "Не удалось обновить очередь. " + jobsConnectionError;
+  const worker = jobsState.worker;
+  if (!worker) return null;
+  if (!worker.alive)
+    return "Обработчик очереди остановлен. Перезапустите сервер; ожидающие задания сохранены.";
+  return worker.error || null;
+}
 function renderQueue() {
   const c = jobsState.counts;
   $("#view-queue").innerHTML =
-    `<div class="section-card"><div class="editor-header"><div><h2>Задания обработки</h2><p>Счётчики за всё время. Показаны последние 300 заданий. Выполняется один запрос модели одновременно.</p></div><button class="button secondary" data-action="refresh-jobs">${icon("refresh")}Обновить</button></div><div class="queue-counters">${["queued", "running", "waiting_key", "completed", "failed", "interrupted", "paused"].map((s) => `<span class="badge ${["failed", "interrupted"].includes(s) ? "red" : s === "completed" ? "green" : ""}">${jobLabels[s]}: ${c[s] || 0}</span>`).join("")}</div><div class="table-scroll"><table class="data-table"><thead><tr><th>ЗАДАНИЕ / ДИАЛОГ</th><th>СТАТУС</th><th>МОДЕЛЬ / ЧЕК-ЛИСТ</th><th>ПОДРОБНОСТИ</th><th>ДЕЙСТВИЯ</th></tr></thead><tbody>${jobsState.jobs.length ? jobsState.jobs.map((j) => `<tr><td>#${j.id}<br><button data-action="open-result" data-id="${esc(j.conversation_id)}">${esc(j.conversation_id)}</button></td><td><span class="badge ${j.status === "completed" ? "green" : ["failed", "interrupted"].includes(j.status) ? "red" : "amber"}">${esc(jobLabels[j.status] || j.status)}</span></td><td>${esc(j.model || "Правила")}<br><small>Чек-лист v${j.checklist_version} · попыток ${j.attempts}</small></td><td class="job-error">${esc(j.error || (j.evaluation_id ? "Результат #" + j.evaluation_id : "Создано " + new Date(j.created_at).toLocaleString("ru-RU")))}</td><td>${["failed", "interrupted"].includes(j.status) ? `<button class="button secondary small" data-action="retry-job" data-id="${j.id}">Повторить</button>` : ""}${["queued", "waiting_key", "paused", "failed", "interrupted"].includes(j.status) ? `<button class="button text" data-action="cancel-job" data-id="${j.id}">Отменить</button>` : ""}${j.status === "waiting_key" ? '<button class="button text" data-action="settings">Добавить ключ</button>' : ""}${j.status === "running" ? "Запрос уже отправлен" : ""}${j.status === "paused" ? '<button class="button text" data-action="resume-jobs">Возобновить очередь</button>' : ""}</td></tr>`).join("") : '<tr><td colspan="5">Очередь пуста. Выберите диалог и нажмите «Проверить диалог».</td></tr>'}</tbody></table></div></div>`;
+    `<div class="section-card"><div class="editor-header"><div><h2>Задания обработки</h2><p>Счётчики за всё время. Показаны последние 300 заданий. Выполняется один запрос модели одновременно.</p></div><button class="button secondary" data-action="refresh-jobs">${icon("refresh")}Обновить</button></div><p class="${queueProblem() ? "submission-warning" : ""}">${esc(queueProblem() || (jobsState.worker ? "Обработчик работает. Задания выполняются последовательно." : "Получаем состояние обработчика…"))}</p><div class="queue-counters">${["queued", "running", "waiting_key", "completed", "failed", "interrupted", "paused"].map((s) => `<span class="badge ${["failed", "interrupted"].includes(s) ? "red" : s === "completed" ? "green" : ""}">${jobLabels[s]}: ${c[s] || 0}</span>`).join("")}</div><div class="table-scroll"><table class="data-table"><thead><tr><th>ЗАДАНИЕ / ДИАЛОГ</th><th>СТАТУС</th><th>МОДЕЛЬ / ЧЕК-ЛИСТ</th><th>ПОДРОБНОСТИ</th><th>ДЕЙСТВИЯ</th></tr></thead><tbody>${jobsState.jobs.length ? jobsState.jobs.map((j) => `<tr><td>#${j.id}<br><button data-action="open-result" data-id="${esc(j.conversation_id)}">${esc(j.conversation_id)}</button></td><td><span class="badge ${j.status === "completed" ? "green" : ["failed", "interrupted"].includes(j.status) ? "red" : "amber"}">${esc(jobLabels[j.status] || j.status)}</span></td><td>${esc(j.model || "Правила")}<br><small>Чек-лист v${j.checklist_version} · попыток ${j.attempts}</small></td><td class="job-error">${esc(j.error || (j.evaluation_id ? "Результат #" + j.evaluation_id : "Создано " + new Date(j.created_at).toLocaleString("ru-RU")))}</td><td>${["failed", "interrupted"].includes(j.status) ? `<button class="button secondary small" data-action="retry-job" data-id="${j.id}">Повторить</button>` : ""}${["queued", "waiting_key", "paused", "failed", "interrupted"].includes(j.status) ? `<button class="button text" data-action="cancel-job" data-id="${j.id}">Отменить</button>` : ""}${j.status === "waiting_key" ? '<button class="button text" data-action="settings">Добавить ключ</button>' : ""}${j.status === "running" ? "Запрос уже отправлен" : ""}${j.status === "paused" ? '<button class="button text" data-action="resume-jobs">Возобновить очередь</button>' : ""}</td></tr>`).join("") : '<tr><td colspan="5">Очередь пуста. Выберите диалог и нажмите «Проверить диалог».</td></tr>'}</tbody></table></div></div>`;
 }
 async function pollJobs() {
   if (pollBusy) return;
   pollBusy = true;
   try {
     const next = await api("jobs"),
-      hash = JSON.stringify(next);
-    if (hash !== jobsHash) {
+      worker = next.worker,
+      hash = JSON.stringify({
+        jobs: next.jobs,
+        counts: next.counts,
+        worker: worker
+          ? {
+              alive: worker.alive,
+              state: worker.state,
+              error: worker.error,
+              job_id: worker.job_id,
+            }
+          : null,
+      }),
+      wasDisconnected = !!jobsConnectionError;
+    jobsConnectionError = null;
+    if (hash !== jobsHash || wasDisconnected) {
       const previous = new Map(jobsState.jobs.map((j) => [j.id, j.status]));
       jobsState = next;
       jobsHash = hash;
@@ -494,8 +520,10 @@ async function pollJobs() {
       renderDetail();
       renderQueueBanner();
     }
-  } catch {
-    /* A temporary disconnect must not discard server-owned jobs or modal input. */
+  } catch (error) {
+    jobsConnectionError = error.message;
+    renderQueueBanner();
+    if (view === "queue") renderQueue();
   } finally {
     pollBusy = false;
   }

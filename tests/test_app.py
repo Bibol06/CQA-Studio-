@@ -5,6 +5,7 @@ import sys
 import tempfile
 import threading
 import time
+import sqlite3
 import unittest
 import urllib.request
 import urllib.error
@@ -134,7 +135,8 @@ class HttpTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):cls.server.shutdown();cls.server.server_close();cls.temp.cleanup()
     def test_health_and_static(self):
-        with urllib.request.urlopen(self.base+'/api/health') as r:self.assertTrue(json.load(r)['ok'])
+        with urllib.request.urlopen(self.base+'/api/health') as r:
+            health=json.load(r);self.assertTrue(health['ok']);self.assertTrue(health['worker']['alive'])
         with urllib.request.urlopen(self.base) as r:
             self.assertIn('CQA Studio',r.read().decode());self.assertIn("script-src 'self'",r.headers['Content-Security-Policy'])
     def test_cross_origin_write_blocked(self):
@@ -146,6 +148,12 @@ class HttpTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as ctx:urllib.request.urlopen(self.base+'/api/missing')
         self.assertEqual(ctx.exception.code,404)
         ctx.exception.close()
+    def test_database_error_returns_503_json(self):
+        with patch.object(self.server.store,'jobs',side_effect=sqlite3.OperationalError('disk I/O error')):
+            with self.assertRaises(urllib.error.HTTPError) as ctx:urllib.request.urlopen(self.base+'/api/jobs')
+            self.assertEqual(ctx.exception.code,503)
+            self.assertEqual(json.load(ctx.exception)['code'],'storage_unavailable')
+            ctx.exception.close()
     def test_local_rules_flow(self):
         req=urllib.request.Request(self.base+'/api/evaluate/p1-ru-022',data=b'{}',headers={'Content-Type':'application/json'})
         with urllib.request.urlopen(req) as r:e=json.load(r)

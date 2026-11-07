@@ -1,5 +1,6 @@
 import copy
 import json
+import sqlite3
 from pathlib import Path
 import tempfile
 import threading
@@ -48,9 +49,7 @@ class QueueTests(unittest.TestCase):
     def tearDown(self):self.temp.cleanup()
     def worker(self,key=''):
         # Deterministic single iteration, using the actual worker implementation and SQLite transactions.
-        worker=Worker.__new__(Worker);worker.store=self.s;worker.key_for=lambda settings:key
-        worker.evaluate_lock=threading.Lock();worker.stop=threading.Event()
-        return worker
+        return Worker(self.s,lambda settings:key,threading.Lock(),start=False)
     def test_double_enqueue_does_not_duplicate_model_call(self):
         first=self.s.enqueue([record()['conversation_id']]);second=self.s.enqueue([record()['conversation_id']])
         self.assertEqual(len(first['created']),1);self.assertEqual(second['created'],[]);self.assertEqual(second['existing'],first['created'])
@@ -112,3 +111,74 @@ class QueueTests(unittest.TestCase):
             while time.monotonic()<deadline and not self.s.jobs()['counts'].get('completed'):time.sleep(.02)
             self.assertEqual(self.s.jobs()['counts']['completed'],1)
         finally:worker.close()
+
+    def test_worker_survives_temporary_candidate_read_failure(self):
+        self.s.enqueue([record()['conversation_id']])
+        original=self.s.candidates; failures=[True]
+        def temporarily_unavailable():
+            if failures.pop() if failures else False:raise sqlite3.OperationalError('disk I/O error')
+            return original()
+        with patch.object(self.s,'candidates',side_effect=temporarily_unavailable):
+            worker=Worker(self.s,lambda s:'',threading.Lock())
+            try:
+                deadline=time.monotonic()+1
+                while time.monotonic()<deadline and worker.health()['state']!='storage_error':time.sleep(.01)
+                self.assertTrue(worker.health()['alive'])
+                self.assertEqual(worker.health()['state'],'storage_error')
+                worker.wake.set()
+                deadline=time.monotonic()+2
+                while time.monotonic()<deadline and not self.s.jobs()['counts'].get('completed'):time.sleep(.02)
+                self.assertEqual(self.s.jobs()['counts']['completed'],1)
+                self.assertTrue(worker.health()['alive'])
+            finally:worker.close()
+
+    def model_job(self):
+        self.s.save_settings({'provider':'gemini','model':'test-model','base_url':'https://generativelanguage.googleapis.com/v1beta/openai'})
+        return self.s.enqueue([record()['conversation_id']])['created'][0]
+
+    def test_save_recovery_keeps_response_without_second_model_call(self):
+        self.model_job();worker=self.worker('unit-test-key')
+        original=self.s.save_evaluation;failures=[True]
+        def save_with_temporary_error(*args):
+            if failures.pop() if failures else False:raise sqlite3.OperationalError('disk I/O error')
+            return original(*args)
+        with patch('cqa.queue.call_model',return_value=(answers(),{'provider':'gemini','model':'test-model'},insights())) as call,patch.object(self.s,'save_evaluation',side_effect=save_with_temporary_error):
+            with self.assertRaises(sqlite3.Error):worker.run_once()
+            self.assertIsNotNone(worker.pending)
+            self.assertEqual(self.s.jobs()['counts'],{'running':1})
+            self.assertTrue(worker.run_once())
+            self.assertEqual(call.call_count,1)
+        self.assertEqual(self.s.jobs()['counts'],{'completed':1})
+        self.assertEqual(len(self.s.export()['evaluations']),1)
+
+    def test_uncertain_commit_does_not_duplicate_saved_evaluation(self):
+        self.model_job();worker=self.worker('unit-test-key');original=self.s.save_evaluation
+        def save_then_report_error(*args):
+            original(*args)
+            raise sqlite3.OperationalError('disk I/O error after COMMIT')
+        with patch('cqa.queue.call_model',return_value=(answers(),{'provider':'gemini','model':'test-model'},insights())) as call,patch.object(self.s,'save_evaluation',side_effect=save_then_report_error):
+            with self.assertRaises(sqlite3.Error):worker.run_once()
+            self.assertTrue(worker.run_once())
+            self.assertEqual(call.call_count,1)
+        self.assertEqual(len(self.s.export()['evaluations']),1)
+
+    def test_claim_commit_error_never_sends_model_request(self):
+        self.model_job();worker=self.worker('unit-test-key');original=self.s.job_state
+        def claim_then_report_error(*args):
+            original(*args)
+            raise sqlite3.OperationalError('disk I/O error after claim')
+        with patch('cqa.queue.call_model') as call,patch.object(self.s,'job_state',side_effect=claim_then_report_error):
+            with self.assertRaises(sqlite3.Error):worker.run_once()
+            self.assertTrue(worker.run_once());call.assert_not_called()
+        self.assertEqual(self.s.jobs()['counts'],{'failed':1})
+
+    def test_error_finalization_retries_database_without_model_retry(self):
+        self.model_job();worker=self.worker('unit-test-key');original=self.s.finish_job_error;failures=[True]
+        def fail_once(*args):
+            if failures.pop() if failures else False:raise sqlite3.OperationalError('disk I/O error')
+            return original(*args)
+        with patch('cqa.queue.call_model',side_effect=ValueError('Сервис модели вернул HTTP 429.')) as call,patch.object(self.s,'finish_job_error',side_effect=fail_once):
+            with self.assertRaises(sqlite3.Error):worker.run_once()
+            self.assertTrue(worker.run_once())
+            self.assertEqual(call.call_count,1)
+        self.assertEqual(self.s.jobs()['counts'],{'failed':1})

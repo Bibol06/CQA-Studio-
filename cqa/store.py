@@ -186,6 +186,19 @@ class Store:
                 row=db.execute("UPDATE jobs SET status=?,error=?,updated_at=? WHERE id=? AND status IN ('queued','running','waiting_key')",(status,error,now(),jid))
             return bool(row.rowcount)
 
+    def job_checkpoint(self,jid):
+        with self.db() as db:
+            row=db.execute('SELECT status,evaluation_id FROM jobs WHERE id=?',(jid,)).fetchone()
+        if not row:raise ValueError('Задание не найдено')
+        return dict(row)
+
+    def finish_job_error(self,jid,error,pause=False):
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute("UPDATE jobs SET status='failed',error=?,updated_at=? WHERE id=? AND status IN ('queued','running','waiting_key','failed')",(error,now(),jid))
+            if pause:
+                db.execute("UPDATE jobs SET status='paused',error=?,updated_at=? WHERE status='queued'",('Провайдер отклонил запрос по ключу, доступу или квоте. Исправьте причину и возобновите очередь вручную.',now()))
+
     def retry_job(self,jid):
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')

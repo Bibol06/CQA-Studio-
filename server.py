@@ -3,6 +3,7 @@ import argparse
 import json
 import mimetypes
 import os
+import sqlite3
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlparse,unquote,parse_qsl,urlencode,urlunparse
@@ -51,12 +52,14 @@ def make_server(port=8765,db_path=None):
             path=unquote(urlparse(self.path).path)
             try:
                 if path=='/api/state': return self.write_json({**store.overview(),'queue_counts':store.jobs()['counts']})
-                if path=='/api/jobs': return self.write_json(store.jobs())
+                if path=='/api/jobs': return self.write_json({**store.jobs(),'worker':worker.health()})
                 if path.startswith('/api/conversations/'): return self.write_json(store.detail(path.split('/')[-1]))
                 if path=='/api/settings': return self.write_json({**store.settings(),'key_configured':bool(key_for(store.settings()))})
                 if path=='/api/export': return self.write_json(store.export())
                 if path=='/api/submission/catalog':return self.write_json({'groups':catalog(store),'team_name':store.submission_team()})
-                if path=='/api/health': return self.write_json({'ok':True,'version':'0.4.0','benchmark_variants':['A','B'],'background_queue':True,'insights':True,'submission_schema':'1.0'})
+                if path=='/api/health':
+                    health=worker.health()
+                    return self.write_json({'ok':health['alive'] and health['state'] not in ['storage_error','error','stopped'],'version':'0.4.1','benchmark_variants':['A','B'],'background_queue':True,'insights':True,'submission_schema':'1.0','worker':health})
                 if path.startswith('/api/'): return self.write_json({'error':'Не найдено'},404)
                 target=STATIC/('index.html' if path=='/' else path.lstrip('/'))
                 if not target.resolve().is_relative_to(STATIC.resolve()) or not target.is_file(): return self.write_json({'error':'Не найдено'},404)
@@ -65,6 +68,7 @@ def make_server(port=8765,db_path=None):
                 self.send_header('Content-Length',str(len(raw))); self.send_header('Cache-Control','no-cache')
                 self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; media-src https: http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
                 self.send_header('X-Content-Type-Options','nosniff'); self.end_headers(); self.wfile.write(raw)
+            except sqlite3.Error:self.write_json({'error':'Локальная база временно недоступна. Сохранённые данные не удалены; повторите операцию после восстановления доступа.','code':'storage_unavailable'},503)
             except (ValueError,KeyError,json.JSONDecodeError) as e: self.write_json({'error':str(e)},400)
         def do_POST(self):
             if not self.trusted(): return self.write_json({'error':'Неверный источник запроса'},403)
@@ -139,6 +143,7 @@ def make_server(port=8765,db_path=None):
                 if path.startswith('/api/appeals/') and path.endswith('/resolve'):
                     return self.write_json(store.resolve(int(path.split('/')[-2]),body.get('value'),body.get('reason')))
                 return self.write_json({'error':'Не найдено'},404)
+            except sqlite3.Error:self.write_json({'error':'Локальная база временно недоступна. Повторите операцию после восстановления доступа.','code':'storage_unavailable'},503)
             except (ValueError,KeyError,TypeError,json.JSONDecodeError) as e: self.write_json({'error':str(e)},400)
             except (urllib.error.URLError,TimeoutError): self.write_json({'error':'Сервис данных недоступен. Локальные данные сохранены.'},502)
             except Exception:

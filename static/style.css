@@ -1792,6 +1792,11 @@ dialog::backdrop {
 .submission-warning {
   color: #94631b;
 }
+.queue-banner.queue-warning {
+  background: #fff6e7;
+  border-color: #e4c48e;
+  color: #795719;
+}
 .submission-errors {
   max-height: 290px;
   overflow: auto;
