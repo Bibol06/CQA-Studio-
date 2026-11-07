@@ -23,9 +23,13 @@ class Store:
             CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,error TEXT,evaluation_id INTEGER,attempts INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS model_attempts(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,job_id INTEGER,status TEXT NOT NULL,payload TEXT NOT NULL,error TEXT,evaluation_id INTEGER,created_at TEXT NOT NULL,finished_at TEXT);
+            CREATE TABLE IF NOT EXISTS audio_analyses(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS audio_reviews(id INTEGER PRIMARY KEY AUTOINCREMENT,analysis_id INTEGER NOT NULL,event_index INTEGER NOT NULL,verdict TEXT NOT NULL,note TEXT NOT NULL,created_at TEXT NOT NULL);
             ''')
             if 'dataset' not in [r['name'] for r in db.execute('PRAGMA table_info(conversations)')]:
                 db.execute("ALTER TABLE conversations ADD COLUMN dataset TEXT NOT NULL DEFAULT 'DEV'")
+            if 'audio_analysis_id' not in [r['name'] for r in db.execute('PRAGMA table_info(jobs)')]:
+                db.execute('ALTER TABLE jobs ADD COLUMN audio_analysis_id INTEGER')
             if not db.execute('SELECT 1 FROM checklists LIMIT 1').fetchone():
                 db.execute('INSERT INTO checklists VALUES(?,?,?)',(1,dumps(default_checklist()),now()))
     @contextmanager
@@ -97,7 +101,9 @@ class Store:
         with self.db() as db:
             ids=[r[0] for r in db.execute('SELECT id FROM evaluations WHERE conversation_id=? ORDER BY id DESC',(cid,))]
             group=db.execute('SELECT dataset FROM conversations WHERE id=?',(cid,)).fetchone()[0]
-        return {'record':record,'dataset_group':group,'evaluation':self.evaluation(ids[0]) if ids else None,'history':[self.evaluation(e) for e in ids[1:]],'current_version':self.config()['version']}
+        audio=self.audio_history(cid)
+        return {'record':record,'dataset_group':group,'evaluation':self.evaluation(ids[0]) if ids else None,'history':[self.evaluation(e) for e in ids[1:]],'current_version':self.config()['version'],
+                'audio_analysis':audio[0] if audio else None,'audio_history':audio[1:]}
     def overview(self):
         with self.db() as db:
             rows=[(json.loads(r['payload']),r['dataset']) for r in db.execute('SELECT payload,dataset FROM conversations ORDER BY id')]
@@ -145,7 +151,54 @@ class Store:
         return row[0] if row else ''
     def export(self):
         with self.db() as db: ids=[r[0] for r in db.execute('SELECT id FROM evaluations ORDER BY id')]
-        return {'exported_at':now(),'checklist':self.config(),'evaluations':[self.evaluation(i) for i in ids]}
+        return {'exported_at':now(),'checklist':self.config(),'evaluations':[self.evaluation(i) for i in ids],
+                'audio_analyses':self.audio_history()}
+
+    def save_audio_analysis(self,cid,result,meta,job_id):
+        payload={'result':result,'meta':meta}
+        with self.db() as db:
+            cur=db.execute('INSERT INTO audio_analyses(conversation_id,payload,created_at) VALUES(?,?,?)',(cid,dumps(payload),now()))
+            aid=cur.lastrowid
+            updated=db.execute("UPDATE jobs SET status='completed',audio_analysis_id=?,error=NULL,updated_at=? WHERE id=? AND status='running'",(aid,now(),job_id))
+            if updated.rowcount!=1:raise ValueError('Состояние задания изменилось; аудиоанализ не сохранён')
+            if meta.get('attempt_id') is not None:
+                db.execute("UPDATE model_attempts SET status='completed',payload=?,finished_at=? WHERE id=? AND status='running'",(dumps(meta),now(),meta['attempt_id']))
+        return aid
+
+    def audio_history(self,cid=None):
+        with self.db() as db:
+            rows=list(db.execute('SELECT * FROM audio_analyses '+('WHERE conversation_id=? ' if cid else '')+'ORDER BY id DESC',(cid,) if cid else ()))
+            reviews=[dict(r) for r in db.execute('SELECT * FROM audio_reviews ORDER BY id')]
+        results=[]
+        for row in rows:
+            item={**json.loads(row['payload']),'id':row['id'],'conversation_id':row['conversation_id'],'created_at':row['created_at']}
+            item['reviews']=[r for r in reviews if r['analysis_id']==row['id']]
+            item['event_reviews']={str(r['event_index']):r for r in item['reviews']}
+            results.append(item)
+        return results
+
+    def audio_review(self,aid,index,verdict,note=''):
+        if type(aid) is not int or type(index) is not int or verdict not in ['confirmed','rejected'] or not isinstance(note,str) or len(note)>2000:
+            raise ValueError('Неверное решение по аудиособытию')
+        with self.db() as db:
+            row=db.execute('SELECT payload FROM audio_analyses WHERE id=?',(aid,)).fetchone()
+            if not row or not 0<=index<len(json.loads(row[0])['result']['events']):raise ValueError('Аудиособытие не найдено')
+            db.execute('INSERT INTO audio_reviews(analysis_id,event_index,verdict,note,created_at) VALUES(?,?,?,?,?)',(aid,index,verdict,note.strip(),now()))
+
+    def audio_summary(self,cids):
+        latest={}
+        for analysis in self.audio_history():
+            cid=analysis['conversation_id']
+            if cid in cids and cid not in latest:latest[cid]=analysis
+        events=[]
+        for cid,analysis in latest.items():
+            for i,event in enumerate(analysis['result']['events']):
+                events.append({**event,'conversation_id':cid,'analysis_id':analysis['id'],'event_index':i,
+                               'verdict':analysis['event_reviews'].get(str(i),{}).get('verdict')})
+        return {'total_calls':len(cids),'analyzed_calls':len(latest),'events':events,
+                'partial_analyses':sum(a['result'].get('validation',{}).get('status')=='partial' for a in latest.values()),
+                'confirmed':sum(e['verdict']=='confirmed' for e in events),'rejected':sum(e['verdict']=='rejected' for e in events),
+                'unreviewed':sum(e['verdict'] is None for e in events)}
 
     def recover_jobs(self):
         with self.db() as db:
@@ -175,18 +228,22 @@ class Store:
         for attempt in attempts:attempt.pop('payload')
         return records,evaluations,attempts,config
 
-    def enqueue(self,cids,variant='B'):
+    def enqueue(self,cids,variant='B',kind='text'):
         if not isinstance(cids,list) or not 1<=len(cids)<=200 or any(not isinstance(cid,str) for cid in cids):
             raise ValueError('Выберите от 1 до 200 диалогов')
         if variant not in ['A','B']: raise ValueError('Неизвестный вариант оценки')
+        if kind not in ['text','audio']:raise ValueError('Неизвестный вид обработки')
         config=self.config();settings=self.settings();created=[];existing=[]
-        for cid in cids:self.record(cid)
+        for cid in cids:
+            record=self.record(cid)
+            if kind=='audio' and (record['channel']!='voice call' or not record.get('audio_url')):raise ValueError('Анализ звука доступен только для звонков с записью')
+        if kind=='audio' and settings['provider']!='gemini':raise ValueError('Для анализа звука выберите Gemini в настройках модели')
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             for cid in dict.fromkeys(cids):
-                active=db.execute("SELECT id FROM jobs WHERE conversation_id=? AND status IN ('queued','running','waiting_key','paused')",(cid,)).fetchone()
+                active=next((r for r in db.execute("SELECT id,payload FROM jobs WHERE conversation_id=? AND status IN ('queued','running','waiting_key','paused')",(cid,)) if json.loads(r['payload']).get('kind','text')==kind),None)
                 if active: existing.append(active[0]);continue
-                payload={'checklist':config,'settings':settings,'variant':variant}
+                payload={'checklist':config,'settings':settings,'variant':variant,'kind':kind}
                 cur=db.execute("INSERT INTO jobs(conversation_id,payload,status,created_at,updated_at) VALUES(?,?,'queued',?,?)",(cid,dumps(payload),now(),now()))
                 created.append(cur.lastrowid)
         return {'created':created,'existing':existing}
@@ -198,6 +255,7 @@ class Store:
         for r in rows:
             payload=json.loads(r.pop('payload'));r['checklist_version']=payload['checklist']['version']
             r['provider']=payload['settings']['provider'];r['model']=payload['settings'].get('model','')
+            r['kind']=payload.get('kind','text')
         return {'jobs':rows,'counts':counts}
 
     def candidates(self):
@@ -237,7 +295,8 @@ class Store:
             db.execute('BEGIN IMMEDIATE')
             job=db.execute('SELECT * FROM jobs WHERE id=?',(jid,)).fetchone()
             if not job or job['status'] not in ['failed','interrupted']:raise ValueError('Повтор доступен для ошибочных или прерванных заданий')
-            if db.execute("SELECT 1 FROM jobs WHERE conversation_id=? AND status IN ('queued','running','waiting_key','paused')",(job['conversation_id'],)).fetchone():
+            kind=json.loads(job['payload']).get('kind','text')
+            if any(json.loads(r['payload']).get('kind','text')==kind for r in db.execute("SELECT payload FROM jobs WHERE conversation_id=? AND status IN ('queued','running','waiting_key','paused')",(job['conversation_id'],))):
                 raise ValueError('Этот диалог уже находится в очереди')
             db.execute("UPDATE jobs SET status='queued',error=NULL,updated_at=? WHERE id=?",(now(),jid))
 

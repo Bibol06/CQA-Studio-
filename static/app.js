@@ -111,17 +111,19 @@ async function refresh() {
   if (view === "analytics") renderAnalytics();
 }
 function renderStats() {
-  const totals = state.records.filter((r) => r.score != null),
-    evaluated = state.records.filter((r) => r.evaluated),
-    calls = state.records.filter((r) => r.channel === "voice call").length;
+  const channel = view === "dialogs" ? $("#channel").value : "";
+  const records = state.records.filter(r => !channel || r.channel === channel);
+  const totals = records.filter((r) => r.score != null),
+    evaluated = records.filter((r) => r.evaluated),
+    calls = records.filter((r) => r.channel === "voice call").length;
   const average = totals.length
     ? totals.reduce((s, r) => s + r.score, 0) / totals.length
     : null;
   const stats = [
     [
-      "Всего диалогов",
-      state.records.length,
-      `${state.records.length - calls} чатов · ${calls} звонков`,
+      channel === "voice call" ? "Всего звонков" : channel === "agent chat" ? "Всего чатов" : "Всего диалогов",
+      records.length,
+      `${records.length - calls} чатов · ${calls} звонков`,
       "messages",
     ],
     [
@@ -139,7 +141,7 @@ function renderStats() {
       "chart",
     ],
     [
-      "Открытые апелляции",
+      "Апелляции во всём наборе",
       state.open_appeals,
       "Решения сохраняются в истории",
       "shield",
@@ -187,6 +189,7 @@ function filtered() {
   );
 }
 function renderList() {
+  renderChannelTabs();
   const records = filtered();
   $("#filtered-count").textContent = records.length;
   $("#conversation-list").innerHTML = records.length
@@ -198,10 +201,25 @@ function renderList() {
         .join("")
     : '<div class="empty-state"><p>Нет диалогов по выбранным фильтрам.</p></div>';
 }
+function renderChannelTabs() {
+  const selectedChannel = $("#channel").value;
+  $("#channel-tabs").innerHTML = [["","Все диалоги","messages"],["agent chat","Чаты","messages"],["voice call","Звонки","phone"]].map(([value,label,image]) => `<button role="tab" aria-selected="${selectedChannel === value}" class="channel-tab ${selectedChannel === value ? "active" : ""}" data-action="channel-tab" data-channel="${value}">${icon(image)}${label}<span>${state.records.filter(r => !value || r.channel === value).length}</span></button>`).join("");
+}
+async function chooseChannel(channel) {
+  $("#channel").value = channel;
+  renderList();renderStats();
+  const records = filtered();
+  if (records.length && !records.some(r => r.conversation_id === selected)) await selectConversation(records[0].conversation_id);
+  if (channel === "voice call" && detail?.record.channel === "voice call") {resultsMode="audio";renderResults();}
+}
 let selectionSerial = 0;
+let resultsMode = "text";
 async function selectConversation(id) {
   const serial = ++selectionSerial;
+  $("#audio-player")?.pause?.();
+  if (typeof audioPreviewEnd !== "undefined") audioPreviewEnd = null;
   selected = id;
+  resultsMode = "text";
   detail = null;
   renderList();
   $("#transcript-panel").innerHTML =
@@ -238,9 +256,10 @@ let showContext = true;
 function renderTranscript() {
   const r = detail.record,
     e = detail.evaluation,
-    url = safeUrl(r.audio_url);
+    url = r.channel === "voice call" && r.audio_url ? "/api/audio/" + encodeURIComponent(r.conversation_id) : null;
+  const previousAudio = $("#audio-player");
   $("#transcript-panel").innerHTML =
-    `<div class="transcript-heading"><span class="channel-avatar">${icon(r.channel === "voice call" ? "phone" : "messages")}</span><div><h2>${esc(r.conversation_id)}</h2><p>${r.channel === "voice call" ? "Телефонный разговор" : "Переписка с поддержкой"} · ${esc(r.language)} · ${r.transcript.length} реплик</p></div><div class="transcript-actions"><span class="badge green">${esc(detail.dataset_group || "DEV")}</span></div></div>${url ? `<div class="audio-box"><audio id="audio-player" controls preload="none" src="${esc(url)}"></audio><a href="${esc(url)}" target="_blank" rel="noreferrer">Открыть запись отдельно ↗</a><p>Метки ISO сохранены. Точка отсчёта аудио не подтверждена; точный переход к секунде записи требует проверки.</p></div>` : ""}<div class="transcript-tools"><span>Исходный транскрипт</span><label class="toggle"><input type="checkbox" id="context-toggle" ${showContext ? "checked" : ""}>Бот и события</label></div><div class="transcript-messages" id="messages">${r.transcript
+    `<div class="transcript-heading"><span class="channel-avatar">${icon(r.channel === "voice call" ? "phone" : "messages")}</span><div><h2>${esc(r.conversation_id)}</h2><p>${r.channel === "voice call" ? "Телефонный разговор" : "Переписка с поддержкой"} · ${esc(r.language)} · ${r.transcript.length} реплик</p></div><div class="transcript-actions"><span class="badge green">${esc(detail.dataset_group || "DEV")}</span></div></div>${url ? `<div class="audio-box"><audio id="audio-player" data-cid="${esc(r.conversation_id)}" controls preload="metadata" src="${url}"></audio><div id="audio-status" class="audio-status">Получаем запись и длительность…</div><button class="button text small" data-action="audio-info">Проверить запись</button><p>Время плеера начинается с 0:00 записи. Связь с ISO-метками транскрипта отдельно не подтверждена.</p></div>` : ""}<div class="transcript-tools"><span>Исходный транскрипт</span><label class="toggle"><input type="checkbox" id="context-toggle" ${showContext ? "checked" : ""}>Бот и события</label></div><div class="transcript-messages" id="messages">${r.transcript
       .map((t, i) => ({ t, i }))
       .filter(({ t }) => showContext || !["bot", "system"].includes(t.speaker))
       .map(
@@ -250,14 +269,100 @@ function renderTranscript() {
       .join(
         "",
       )}<div class="transcript-end">Конец предоставленного транскрипта</div></div>`;
+  if (url) {
+    if (previousAudio?.dataset.cid === r.conversation_id) $("#audio-player").replaceWith(previousAudio);
+    loadAudioInfo().catch(() => {});
+  }
 }
+const audioEventLabels = {cough:"Кашель",throat_clear:"Прочищение горла",laugh:"Смех",filled_pause:"Пауза с заполнителем",repetition:"Повтор звука или слова",unintelligible:"Неразборчивый фрагмент",overlap:"Одновременная речь",long_pause:"Длительная пауза",volume_change:"Изменение громкости",intonation_change:"Изменение интонации",rate_change:"Изменение темпа",background_noise:"Фоновый шум"};
+const audioRoles = {operator:"Вероятно оператор",client:"Вероятно клиент",bot:"Вероятно автоответчик / IVR",unknown:"Говорящий не определён"};
+const audioCheckLabels = {detected:"Есть кандидат",not_detected:"Не замечено моделью",uncertain:"Неоднозначно",not_assessable:"Не удалось оценить"};
+const audioInfo = new Map();
+let audioPreviewEnd = null;
+function audioTime(value) {
+  if (!Number.isFinite(value) || value < 0) return "—";
+  const seconds = Math.floor(value);
+  return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,"0")}`;
+}
+function resultModeTabs() {
+  return detail?.record.channel === "voice call" ? `<div class="result-mode-tabs" role="tablist" aria-label="Вид анализа звонка"><button role="tab" aria-selected="${resultsMode === "text"}" data-action="result-mode" data-mode="text">Чек-лист</button><button role="tab" aria-selected="${resultsMode === "audio"}" data-action="result-mode" data-mode="audio">${icon("phone")}Звук</button></div>` : "";
+}
+async function loadAudioInfo() {
+  const cid = detail?.record.conversation_id, serial = selectionSerial;
+  if (!cid || detail.record.channel !== "voice call") return;
+  try {
+    const info = await api("audio-info/" + encodeURIComponent(cid));
+    if (selected !== cid || selectionSerial !== serial) return;
+    const previousMatch = audioInfo.get(cid)?.analysis_matches_audio;
+    audioInfo.set(cid,info);
+    const node = $("#audio-status");
+    if (node) node.textContent = `${audioTime(info.duration_seconds)} · ${info.channels === 1 ? "Моно" : "Стерео"} · ${(info.size_bytes/1048576).toFixed(1)} МБ`;
+    if (detail.audio_analysis && previousMatch !== info.analysis_matches_audio && resultsMode === "audio") renderAudioResults();
+  } catch (error) {
+    if (selected === cid && selectionSerial === serial && $("#audio-status")) $("#audio-status").textContent = error.message;
+  }
+}
+function seekAudio(start,end) {
+  const player = $("#audio-player");
+  if (!player || player.dataset.cid !== selected || !Number.isFinite(start) || start < 0) return;
+  audioPreviewEnd = Number.isFinite(end) ? Math.min(end+1.5,Math.max(0,start-1)+20) : null;
+  const play = () => {
+    if (player.dataset.cid !== selected) return;
+    player.currentTime = Math.min(Math.max(0,start-1),Number.isFinite(player.duration) ? player.duration : start);
+    player.play().catch(() => toast("Нажмите Play на плеере, чтобы прослушать фрагмент."));
+  };
+  if (player.readyState >= 1) play();
+  else {player.addEventListener("loadedmetadata",play,{once:true});player.load();}
+}
+function renderAudioResults() {
+  const analysis = detail.audio_analysis, job = activeJob("audio");
+  const button = `<button class="button primary" data-action="analyze-audio" ${job ? "disabled" : ""}>${icon(job ? "clock" : "sparkle")}${job ? esc(jobLabels[job.status]) : analysis ? "Проанализировать звук заново" : "Проанализировать звук"}</button>`;
+  let body = `<div class="audio-analysis-intro"><span class="badge">Отдельно от официального балла</span><p>Gemini получает саму аудиозапись. События и интонационные наблюдения — кандидаты для прослушивания и ручной проверки. Медицинские причины и диагнозы не определяются.</p>${button}${settings.provider !== "gemini" ? '<p class="submission-warning">Для звука выберите Gemini в настройках модели.</p>' : ""}</div><p id="audio-job-status" class="submission-warning"></p>`;
+  if (!analysis) body += '<div class="empty-state"><h3>Звук ещё не анализировался</h3><p>Можно проверить кашель, прочищение горла, паузы, повторы, одновременную речь, шум и изменения звучания.</p></div>';
+  else {
+    const r = analysis.result, labels = {slow:"Медленный",steady:"Ровный",fast:"Быстрый",variable:"Меняется",not_assessable:"Не оценено",even:"Ровная",varied:"Разнообразная"};
+    const review = index => analysis.event_reviews?.[String(index)];
+    const checked = Object.values(analysis.event_reviews || {});
+    body += `<p class="review-note">${esc(analysis.meta.model)} · ${esc(analysis.meta.prompt_version)} · ${audioTime(r.audio.duration_seconds)} · ${fmt(analysis.meta.elapsed_seconds)} с обработки. Временные отметки приблизительные, от начала аудио.</p>${audioInfo.get(selected)?.analysis_matches_audio === false ? '<p class="submission-warning">Сохранённый анализ относится к другой версии аудиофайла. Нужен новый запуск.</p>' : ""}${r.validation?.status === "partial" ? `<div class="audio-validation-warning"><strong>Частичный результат</strong><p>Часть ответа требует проверки. Исключено событий с неверным временем: ${r.validation.discarded_events}; описаний звучания: ${r.validation.discarded_delivery}; противоречий категорий: ${r.validation.contradictory_checks || 0}. Список фрагментов может быть неполным.</p><details><summary>Причины исключения</summary>${r.validation.warnings.map(w => `<p>${esc(w)}</p>`).join("")}</details></div>` : ""}<h3>Как звучит разговор</h3><p>${esc(r.overview)}</p><p class="review-note">Слышимость: ${{clear:"хорошая",mixed:"неоднородная",poor:"низкая"}[r.quality.audibility]}. ${r.quality.limitations.map(esc).join(" · ")}</p>${r.delivery.map(d => `<article class="audio-event"><span class="badge">${audioRoles[d.speaker]}</span><p>Темп: ${labels[d.pace]}; интонация: ${labels[d.intonation]}.</p><p>${esc(d.description)}</p><button class="button text small" data-action="audio-seek" data-start="${d.start_seconds}" data-end="${d.end_seconds}">Слушать ≈${audioTime(d.start_seconds)}–${audioTime(d.end_seconds)}</button></article>`).join("")}<h3>Ответ модели по категориям</h3><p class="review-note">«Не замечено» не гарантирует отсутствие события. Уверенность модели не является измеренной вероятностью.</p><div class="audio-checks">${r.checks.map(c => `<details><summary><span>${audioEventLabels[c.type]}</span><span class="badge ${c.status === "detected" ? "amber" : ""}">${c.consistency_warning ? "Противоречие" : audioCheckLabels[c.status]}</span></summary><p>${esc(c.comment)}</p>${c.consistency_warning ? `<p class="submission-warning">Исходный статус AI: ${audioCheckLabels[c.status]}. ${esc(c.consistency_warning)}</p>` : ""}${c.timing_warning ? '<p class="submission-warning">Модель отметила событие, но его временная привязка не прошла проверку. Нужен ручной поиск в записи.</p>' : ""}</details>`).join("")}</div><h3>Фрагменты для проверки · ${r.events.length}</h3><p class="review-note">Подтверждено: ${checked.filter(v => v.verdict === "confirmed").length}; отклонено: ${checked.filter(v => v.verdict === "rejected").length}; не проверено: ${r.events.length-checked.length}. Кнопки ниже сохраняют решение отдельно от AI-наблюдения.</p>${r.events.length ? r.events.map((e,index) => `<article class="audio-event ${review(index)?.verdict === "rejected" ? "event-rejected" : ""}"><div class="example-head"><strong>${audioEventLabels[e.type]}</strong><span class="badge">≈${audioTime(e.start_seconds)}–${audioTime(e.end_seconds)}</span></div><p><small>${audioRoles[e.speaker]} · уверенность AI: ${{low:"низкая",medium:"средняя",high:"высокая"}[e.confidence]}</small></p><p>${esc(e.description)}</p><button class="button secondary small" data-action="audio-seek" data-start="${e.start_seconds}" data-end="${e.end_seconds}">▶ Прослушать фрагмент</button><div class="audio-verdict">${review(index) ? `<span class="badge ${review(index).verdict === "confirmed" ? "green" : ""}">Решение проверяющего: ${review(index).verdict === "confirmed" ? "подтверждено" : "отклонено"}</span>` : '<span class="badge amber">Не проверено человеком</span>'}<button class="button text small" data-action="audio-review" data-analysis="${analysis.id}" data-event="${index}" data-verdict="confirmed">Подтвердить</button><button class="button text small" data-action="audio-review" data-analysis="${analysis.id}" data-event="${index}" data-verdict="rejected">Отклонить</button></div></article>`).join("") : '<p>Модель не отметила отдельных событий. Это не доказывает их отсутствие.</p>'}<details class="audio-history"><summary>История аудиозапусков · ${(detail.audio_history || []).length}</summary>${(detail.audio_history || []).map(a => `<p>#${a.id} · ${esc(a.meta.model)} · ${a.result.events.length} событий · ${esc(new Date(a.created_at).toLocaleString("ru-RU"))}</p>`).join("")}</details>`;
+  }
+  $("#results-panel").innerHTML = `<div class="results-header"><h2>Анализ звука</h2><span class="badge">AI-наблюдения</span></div>${resultModeTabs()}<div class="result-scroll audio-results">${body}</div>`;
+}
+async function analyzeAudio() {
+  if (detail?.record.channel !== "voice call") return;
+  const cid = selected, serial = selectionSerial;
+  const result = await api("jobs",{conversation_ids:[cid],kind:"audio"});
+  await pollJobs();
+  if (selected === cid && selectionSerial === serial && detail?.record.conversation_id === cid && resultsMode === "audio") renderAudioResults();
+  toast(result.created.length ? "Аудиоанализ добавлен в очередь" : "Аудиоанализ уже находится в очереди");
+}
+async function reviewAudio(button) {
+  const cid = selected, serial = selectionSerial;
+  await api("audio-reviews",{analysis_id:Number(button.dataset.analysis),event_index:Number(button.dataset.event),verdict:button.dataset.verdict});
+  const incoming = await api("conversations/" + encodeURIComponent(cid));
+  if (selected !== cid || serial !== selectionSerial) return;
+  detail = incoming;renderAudioResults();
+  toast("Решение по событию сохранено");
+}
+function renderAudioOverview(data) {
+  if (!data?.total_calls) return "";
+  return `<div class="section-card"><h2>Аудиособытия в звонках</h2><p>Проанализировано по звуку: ${data.analyzed_calls}/${data.total_calls}; частичных результатов: ${data.partial_analyses || 0}. Кандидатов: ${data.events.length}; подтверждено проверяющим: ${data.confirmed}; отклонено: ${data.rejected}; не проверено: ${data.unreviewed}. Эти признаки не меняют официальный балл.</p>${data.events.length ? `<div class="audio-overview-events">${data.events.map(e => `<button class="button secondary small" data-action="open-audio-event" data-id="${esc(e.conversation_id)}" data-start="${e.start_seconds}" data-end="${e.end_seconds}">${esc(e.conversation_id)} · ${audioEventLabels[e.type]} · ≈${audioTime(e.start_seconds)}${e.verdict === "confirmed" ? " · подтверждено" : e.verdict === "rejected" ? " · отклонено" : " · проверить"}</button>`).join("")}</div>` : '<p>Аудионаблюдения появятся после отдельного запуска во вкладке «Звонки → Звук».</p>'}</div>`;
+}
+document.addEventListener("timeupdate",event => {
+  const player = event.target;
+  if (player.id === "audio-player" && audioPreviewEnd != null && player.currentTime >= audioPreviewEnd) {audioPreviewEnd=null;player.pause();}
+},true);
+document.addEventListener("pause",event => {if (event.target.id === "audio-player") audioPreviewEnd = null;},true);
+document.addEventListener("error",event => {
+  if (event.target.id === "audio-player" && $("#audio-status")) $("#audio-status").textContent = "Не удалось воспроизвести запись. Нажмите «Проверить запись», чтобы уточнить доступность.";
+},true);
 function renderResults() {
   if (!detail) return;
   const r = detail.record,
     e = detail.evaluation;
+  if (r.channel === "voice call" && resultsMode === "audio") {renderAudioResults();return;}
   if (!e) {
     $("#results-panel").innerHTML =
-      `<div class="results-header"><h2>Оценка диалога</h2><span class="badge">Не проверен</span></div><div class="empty-state">${icon("sparkle")}<h3>От разговора к выводам</h3><p>Запустите проверку по текущему чек-листу. Для каждого вывода будет показано объяснение и основание.</p><button class="button primary" data-action="evaluate" ${busy ? "disabled" : ""}>${icon(busy ? "refresh" : "sparkle", busy ? "spinner" : "")}${busy ? "Проверяем…" : "Проверить диалог"}</button><span class="badge">${esc(modelName())} · v${state.checklist.version}</span></div>`;
+      `<div class="results-header"><h2>${r.channel === "voice call" ? "Оценка по транскрипту" : "Оценка чата"}</h2><span class="badge">Не проверен</span></div>${resultModeTabs()}<div class="empty-state">${icon("sparkle")}<h3>От разговора к выводам</h3><p>Запустите проверку по текущему чек-листу. Для каждого вывода будет показано объяснение и основание.</p><button class="button primary" data-action="evaluate" ${busy ? "disabled" : ""}>${icon(busy ? "refresh" : "sparkle", busy ? "spinner" : "")}${busy ? "Проверяем…" : "Проверить диалог"}</button><span class="badge">${esc(modelName())} · v${state.checklist.version}</span></div>`;
     return;
   }
   const s = e.final_score,
@@ -268,7 +373,7 @@ function renderResults() {
         e.answers.find((a) => a.criterion_id === c.id)?.value == null,
     );
   $("#results-panel").innerHTML =
-    `<div class="results-header"><h2>Оценка диалога</h2><span class="badge ${s.complete ? "green" : "amber"}">${s.complete ? "С итогом" : "На пересмотр"}</span></div>${e.checklist.version !== detail.current_version ? '<div class="stale-note">Чек-лист изменён. Оценка сохранена по версии ' + e.checklist.version + ". Запустите новую проверку.</div>" : ""}<div class="result-scroll"><div class="score-block"><div class="score-line"><div><div class="score-number">${fmt(s.total)} <small>/ 100</small></div><div class="score-caption">${s.complete ? "Итог с учётом решений проверяющего" : `Осталось оценить ${unknown} из ${e.answers.length} критериев`}</div></div><div class="score-annotation"><strong>${e.meta.provider === "rules" ? "Черновая проверка" : esc(e.meta.model)}</strong>${s.gross_error ? '<span class="badge red">Грубая ошибка</span>' : grossUnknown ? "Грубые ошибки: не проверены" : "Грубые ошибки: нет"}</div></div><progress max="100" value="${s.total ?? 0}" aria-label="Итоговый балл"></progress><div class="score-footnote"><span>Чек-лист v${e.checklist.version}</span><span>${s.complete ? `Применимый вес: ${fmt(s.applicable_weight)}` : "Неполная оценка не суммируется"}</span></div>${e.original_score.total !== s.total ? `<div class="review-note">Исходная оценка: ${fmt(e.original_score.total)} → после пересмотра: ${fmt(s.total)}</div>` : ""}</div>${renderSectionScores(s)}${renderInsights(e)}<div class="criteria-heading"><strong>Критерии оценки</strong><span>${e.answers.length} критериев</span></div>${e.checklist.criteria
+    `<div class="results-header"><h2>${r.channel === "voice call" ? "Оценка по транскрипту" : "Оценка чата"}</h2><span class="badge ${s.complete ? "green" : "amber"}">${s.complete ? "С итогом" : "На пересмотр"}</span></div>${resultModeTabs()}${e.checklist.version !== detail.current_version ? '<div class="stale-note">Чек-лист изменён. Оценка сохранена по версии ' + e.checklist.version + ". Запустите новую проверку.</div>" : ""}<div class="result-scroll"><div class="score-block"><div class="score-line"><div><div class="score-number">${fmt(s.total)} <small>/ 100</small></div><div class="score-caption">${s.complete ? "Итог с учётом решений проверяющего" : `Осталось оценить ${unknown} из ${e.answers.length} критериев`}</div></div><div class="score-annotation"><strong>${e.meta.provider === "rules" ? "Черновая проверка" : esc(e.meta.model)}</strong>${s.gross_error ? '<span class="badge red">Грубая ошибка</span>' : grossUnknown ? "Грубые ошибки: не проверены" : "Грубые ошибки: нет"}</div></div><progress max="100" value="${s.total ?? 0}" aria-label="Итоговый балл"></progress><div class="score-footnote"><span>Чек-лист v${e.checklist.version}</span><span>${s.complete ? `Применимый вес: ${fmt(s.applicable_weight)}` : "Неполная оценка не суммируется"}</span></div>${e.original_score.total !== s.total ? `<div class="review-note">Исходная оценка: ${fmt(e.original_score.total)} → после пересмотра: ${fmt(s.total)}</div>` : ""}</div>${renderSectionScores(s)}${renderInsights(e)}<div class="criteria-heading"><strong>Критерии оценки</strong><span>${e.answers.length} критериев</span></div>${e.checklist.criteria
       .map((c) =>
         criterionCard(
           c,
@@ -428,16 +533,17 @@ function switchView(next) {
     draft = structuredClone(state.checklist);
     renderChecklist();
   }
+  renderStats();
   if (next === "analytics") renderAnalytics();
   if (next === "queue") renderQueue();
   if (next === "help") renderHelp();
   if (next === "submission")
     loadSubmission().catch((error) => toast(error.message));
 }
-function activeJob() {
+function activeJob(kind = "text") {
   return jobsState.jobs.find(
     (j) =>
-      j.conversation_id === selected &&
+      j.conversation_id === selected && (j.kind || "text") === kind &&
       ["queued", "running", "waiting_key", "paused"].includes(j.status),
   );
 }
@@ -451,6 +557,14 @@ function renderQueueBanner() {
   $("#queue-banner").innerHTML =
     `${icon(problem ? "info" : c.running ? "refresh" : "clock", c.running ? "spinner" : "")}<span>${problem ? esc(problem) : `В работе: <strong>${c.running || 0}</strong> · ожидают: <strong>${c.queued || 0}</strong> · нужен ключ: <strong>${c.waiting_key || 0}</strong>`}</span><button class="button text" data-view="queue">Открыть очередь →</button>`;
   if (detail) {
+    const audioJob = activeJob("audio");
+    document.querySelectorAll('[data-action="analyze-audio"]').forEach(b => {
+      b.disabled = !!audioJob;
+      b.innerHTML = icon(audioJob ? "clock" : "sparkle") + (audioJob ? esc(jobLabels[audioJob.status]) : detail.audio_analysis ? "Проанализировать звук заново" : "Проанализировать звук");
+    });
+    const latestAudioJob = jobsState.jobs.find(j => j.conversation_id === selected && j.kind === "audio");
+    const audioMessage = $("#audio-job-status");
+    if (audioMessage) audioMessage.textContent = latestAudioJob && ["failed","interrupted"].includes(latestAudioJob.status) ? latestAudioJob.error : "";
     const job = activeJob();
     document.querySelectorAll('[data-action="evaluate"]').forEach((b) => {
       b.disabled = !!job || busy;
@@ -470,7 +584,7 @@ function queueProblem() {
 function renderQueue() {
   const c = jobsState.counts;
   $("#view-queue").innerHTML =
-    `<div class="section-card"><div class="editor-header"><div><h2>Задания обработки</h2><p>Счётчики за всё время. Показаны последние 300 заданий. Выполняется один запрос модели одновременно.</p></div><button class="button secondary" data-action="refresh-jobs">${icon("refresh")}Обновить</button></div><p class="${queueProblem() ? "submission-warning" : ""}">${esc(queueProblem() || (jobsState.worker ? "Обработчик работает. Задания выполняются последовательно." : "Получаем состояние обработчика…"))}</p><div class="queue-counters">${["queued", "running", "waiting_key", "completed", "failed", "interrupted", "paused"].map((s) => `<span class="badge ${["failed", "interrupted"].includes(s) ? "red" : s === "completed" ? "green" : ""}">${jobLabels[s]}: ${c[s] || 0}</span>`).join("")}</div><div class="table-scroll"><table class="data-table"><thead><tr><th>ЗАДАНИЕ / ДИАЛОГ</th><th>СТАТУС</th><th>МОДЕЛЬ / ЧЕК-ЛИСТ</th><th>ПОДРОБНОСТИ</th><th>ДЕЙСТВИЯ</th></tr></thead><tbody>${jobsState.jobs.length ? jobsState.jobs.map((j) => `<tr><td>#${j.id}<br><button data-action="open-result" data-id="${esc(j.conversation_id)}">${esc(j.conversation_id)}</button></td><td><span class="badge ${j.status === "completed" ? "green" : ["failed", "interrupted"].includes(j.status) ? "red" : "amber"}">${esc(jobLabels[j.status] || j.status)}</span></td><td>${esc(j.model || "Правила")}<br><small>Чек-лист v${j.checklist_version} · попыток ${j.attempts}</small></td><td class="job-error">${esc(j.error || (j.evaluation_id ? "Результат #" + j.evaluation_id : "Создано " + new Date(j.created_at).toLocaleString("ru-RU")))}</td><td>${["failed", "interrupted"].includes(j.status) ? `<button class="button secondary small" data-action="retry-job" data-id="${j.id}">Повторить</button>` : ""}${["queued", "waiting_key", "paused", "failed", "interrupted"].includes(j.status) ? `<button class="button text" data-action="cancel-job" data-id="${j.id}">Отменить</button>` : ""}${j.status === "waiting_key" ? '<button class="button text" data-action="settings">Добавить ключ</button>' : ""}${j.status === "running" ? "Запрос уже отправлен" : ""}${j.status === "paused" ? '<button class="button text" data-action="resume-jobs">Возобновить очередь</button>' : ""}</td></tr>`).join("") : '<tr><td colspan="5">Очередь пуста. Выберите диалог и нажмите «Проверить диалог».</td></tr>'}</tbody></table></div></div>`;
+    `<div class="section-card"><div class="editor-header"><div><h2>Задания обработки</h2><p>Счётчики за всё время. Показаны последние 300 заданий. Выполняется один запрос модели одновременно.</p></div><button class="button secondary" data-action="refresh-jobs">${icon("refresh")}Обновить</button></div><p class="${queueProblem() ? "submission-warning" : ""}">${esc(queueProblem() || (jobsState.worker ? "Обработчик работает. Задания выполняются последовательно." : "Получаем состояние обработчика…"))}</p><div class="queue-counters">${["queued", "running", "waiting_key", "completed", "failed", "interrupted", "paused"].map((s) => `<span class="badge ${["failed", "interrupted"].includes(s) ? "red" : s === "completed" ? "green" : ""}">${jobLabels[s]}: ${c[s] || 0}</span>`).join("")}</div><div class="table-scroll"><table class="data-table"><thead><tr><th>ЗАДАНИЕ / ДИАЛОГ</th><th>СТАТУС</th><th>МОДЕЛЬ / ЧЕК-ЛИСТ</th><th>ПОДРОБНОСТИ</th><th>ДЕЙСТВИЯ</th></tr></thead><tbody>${jobsState.jobs.length ? jobsState.jobs.map((j) => `<tr><td>#${j.id}<br><button data-action="open-result" data-id="${esc(j.conversation_id)}">${esc(j.conversation_id)}</button></td><td><span class="badge ${j.status === "completed" ? "green" : ["failed", "interrupted"].includes(j.status) ? "red" : "amber"}">${esc(jobLabels[j.status] || j.status)}</span></td><td>${esc(j.model || "Правила")}<br><small>${j.kind === "audio" ? "Звук · отдельный анализ" : "Чек-лист v" + j.checklist_version} · попыток ${j.attempts}</small></td><td class="job-error">${esc(j.error || (j.audio_analysis_id ? "Аудиоанализ #" + j.audio_analysis_id : j.evaluation_id ? "Результат #" + j.evaluation_id : "Создано " + new Date(j.created_at).toLocaleString("ru-RU")))}</td><td>${["failed", "interrupted"].includes(j.status) ? `<button class="button secondary small" data-action="retry-job" data-id="${j.id}">Повторить</button>` : ""}${["queued", "waiting_key", "paused", "failed", "interrupted"].includes(j.status) ? `<button class="button text" data-action="cancel-job" data-id="${j.id}">Отменить</button>` : ""}${j.status === "waiting_key" ? '<button class="button text" data-action="settings">Добавить ключ</button>' : ""}${j.status === "running" ? "Запрос уже отправлен" : ""}${j.status === "paused" ? '<button class="button text" data-action="resume-jobs">Возобновить очередь</button>' : ""}</td></tr>`).join("") : '<tr><td colspan="5">Очередь пуста. Выберите диалог и нажмите «Проверить диалог».</td></tr>'}</tbody></table></div></div>`;
 }
 async function pollJobs() {
   if (pollBusy) return;
@@ -627,11 +741,12 @@ function renderAnalyticsData() {
   const groupName = id => {const g = comparison.groups.find(g => g.id === id); return g ? `${g.model} · ${g.prompt_version} · ${g.variant} · ${g.reasoning_effort || "default"}` : "—";};
   $("#view-analytics").innerHTML = `
     <div class="section-card analytics-intro"><div class="editor-header"><div><h2>От оценки к причине</h2><p>Карта по исходным AI-оценкам актуального чек-листа. Нажмите на тему или ячейку, чтобы проверить конкретные диалоги.</p></div><button class="button secondary" data-action="analytics-refresh">${icon("refresh")}Обновить</button></div>
-    <div class="analytics-filters">${[["dataset_group","Набор данных"],["language","Язык"],["channel","Канал"]].map(([key,name]) => `<label class="field">${name}<select data-analytics-filter="${key}" aria-label="Аналитика: ${name}"><option value="">Все</option>${d.options[key].map(v => `<option value="${esc(v)}" ${analyticsFilters[key] === v ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>`).join("")}</div></div>
+    <div class="analytics-filters">${[["dataset_group","Набор данных"],["language","Язык"],["channel","Канал"]].map(([key,name]) => `<label class="field">${name}<select data-analytics-filter="${key}" aria-label="Аналитика: ${name}"><option value="">Все</option>${d.options[key].map(v => `<option value="${esc(v)}" ${analyticsFilters[key] === v ? "selected" : ""}>${esc(key === "channel" ? ({"agent chat":"Чаты","voice call":"Звонки"}[v] || v) : v)}</option>`).join("")}</select></label>`).join("")}</div></div>
     <div class="analytics-grid analytics-coverage"><article class="section-card"><span class="eyebrow">ПОКРЫТИЕ ОЦЕНКОЙ</span><h2>${c.evaluated} <small>/ ${c.total}</small></h2><p>Полные AI-оценки текущих правил. Без оценки: ${c.total-c.evaluated}; устаревших: ${c.stale}.</p></article><article class="section-card"><span class="eyebrow">РАЗБОР ВОПРОСОВ</span><h2>${c.requests} <small>/ ${c.total}</small></h2><p>Диалоги с AI-разбором вопросов. Резюме: ${c.summaries}. Полноту разбора проверяет человек.</p></article><article class="section-card"><span class="eyebrow">СИГНАЛЫ ЗАТРУДНЕНИЙ</span><h2>${c.friction} <small>/ ${c.total}</small></h2><p>Повторы после оператора и явное непонимание. Проверяемая эвристика, без штрафа за длину.</p><button class="button text" data-action="analytics-friction">Показать диалоги ↘</button></article></div>
     <div class="section-card"><h2>Темы × нарушения критериев</h2><p>Темы определяются по словам в репликах клиента на RU / KZ / EN; у диалога может быть несколько тем. Ячейка: нарушения / применимые оценки, N/A исключены. «—» означает отсутствие оценок. К${d.criteria.find(x=>x.is_gross)?.id ?? "8"} — отдельный флаг грубой ошибки.</p><div class="table-scroll"><table class="data-table problem-map"><thead><tr><th>ТЕМА / ДИАЛОГИ</th>${d.criteria.map(x => `<th title="${esc(x.name)}">К${x.id}<span>${esc(x.name)}</span></th>`).join("")}</tr></thead><tbody>${d.topics.map(t => `<tr><td><button class="topic-link" data-action="analytics-cell" data-topic="${t.id}">${esc(t.label)}</button><small>${t.total} диалогов · оценено ${t.evaluated}</small></td>${t.cells.map(cell => `<td><button class="map-cell ${cell.failed ? "has-failures" : ""}" data-action="analytics-cell" data-topic="${t.id}" data-criterion="${cell.criterion_id}" ${cell.failed ? "" : "disabled"} aria-label="${esc(t.label)}, критерий ${cell.criterion_id}: нарушений ${cell.failed} из ${cell.applicable}">${cell.applicable ? `${cell.failed} / ${cell.applicable}` : "—"}</button></td>`).join("")}</tr>`).join("")}</tbody></table></div></div>
     <div class="section-card"><h2>Итог разговора по тексту</h2><p>AI-резюме отражает только транскрипт. Обещанный следующий шаг ещё не подтверждает решение в банковской системе.</p><div class="outcome-filters">${Object.entries(outcomeLabels).map(([key,name]) => `<button class="button secondary ${sel.outcome === key ? "selected-filter" : ""}" data-action="analytics-outcome" data-outcome="${key}">${name} · ${d.outcomes[key] || 0}</button>`).join("")}</div></div>
     <div class="section-card" id="analytics-drilldown"><div class="editor-header"><div><h2>${esc(label)}</h2><p>Найдено: ${rows.length}. Цитаты открывают исходный транскрипт.</p></div><button class="button text" data-action="analytics-reset">Сбросить отбор</button></div><div class="analytics-examples">${rows.length ? rows.map(r => `<article class="analytics-example"><div class="example-head"><button data-action="open-result" data-id="${esc(r.conversation_id)}">${esc(r.conversation_id)} ↗</button><span class="badge">${esc(r.language)} · ${esc(r.channel)}</span><span class="badge ${r.evaluated ? "green" : ""}">${r.evaluated ? fmt(r.score) + " / 100" : "Без актуальной AI-оценки"}</span></div><p>${esc(r.preview)}</p><small>${r.topics.map(t => esc(t.label)).join(" · ")} · ${outcomeLabels[r.outcome]}</small>${r.outcome_conflict ? '<p class="submission-warning">Резюме и разбор отдельных вопросов расходятся — нужен пересмотр.</p>' : ""}${sel.criterion != null ? r.failed.filter(f => f.id === sel.criterion).map(f => analyticsEvidence(r.conversation_id,f.evidence)).join("") : chosenTopic ? analyticsEvidence(r.conversation_id,r.topics.find(t => t.id === sel.topic)?.evidence.slice(0,1)) : ""}${r.friction.map(f => `<details><summary>${esc(f.label)} · проверить</summary>${analyticsEvidence(r.conversation_id,f.evidence)}</details>`).join("")}</article>`).join("") : '<p>Диалогов с таким сочетанием фильтров нет.</p>'}</div></div>
+    ${renderAudioOverview(d.audio)}
     <div class="section-card"><h2>Сравнение запусков модели</h2><p>Группы учитывают модель, версию промпта, вариант, режим рассуждения и чек-лист. Успех означает прохождение проверки критериев по структуре и цитатам, а не подтверждённую правильность. Дополнительные блоки могут отсутствовать. Это наблюдение, а не завершённый A/B-тест. Журнал всех попыток ведётся с версии 0.5; для старых запусков известны только сохранённые ответы.</p><div class="table-scroll"><table class="data-table comparison-table"><thead><tr><th>КОНФИГУРАЦИЯ</th><th>СОХРАНЕНО / ДИАЛОГОВ</th><th>НОВЫЙ ЖУРНАЛ</th><th>СРЕДНЕЕ ВРЕМЯ</th><th>ТОКЕНЫ ВХОД / ВЫХОД</th><th>ИЗВЕСТНЫЙ РАСХОД</th></tr></thead><tbody>${comparison.groups.map(g => `<tr><td><strong>${esc(g.model)}</strong><br>${esc(g.provider)} · ${esc(g.prompt_version)} · ${esc(g.variant)}<br><small>${esc(g.reasoning_effort || "default")} · правила ${esc((g.checklist_hash || "?").slice(0,8))}</small></td><td>${g.saved_evaluations} / ${g.unique_conversations}<br><small>Старых ответов: ${g.legacy_saved}</small></td><td>Успех: ${g.completed}; ошибки: ${g.failed}<br><small>Прервано: ${g.interrupted}; в работе: ${g.running}; всего: ${g.traced_attempts}</small></td><td>${fmt(g.mean_seconds)} с<br><small>Измерено: ${g.latency_known}/${g.traced_attempts}</small></td><td>${g.usage_known ? fmt(g.input_tokens) + " / " + fmt(g.output_tokens) : "—"}<br><small>Расход известен: ${g.usage_known}/${g.traced_attempts}</small></td><td>${g.known_cost_usd == null ? "—" : "$" + g.known_cost_usd}<br><small>Цена и токены известны: ${g.cost_known}/${g.traced_attempts}</small></td></tr>`).join("") || '<tr><td colspan="6">Нет запусков модели.</td></tr>'}</tbody></table></div>
     <h3>Одни диалоги, разные конфигурации</h3><p>Сравниваем последние сохранённые ответы каждой конфигурации на общих ID при одинаковом чек-листе. Расхождение не определяет, какая модель права.</p>${comparison.paired.map(pair => `<details class="paired-comparison"><summary>${esc(groupName(pair.left))} ↔ ${esc(groupName(pair.right))}</summary><p>Общих диалогов: ${pair.conversations}; расхождений по критериям: ${pair.different} / ${pair.criteria}.</p>${pair.examples.map(ex => `<button class="button secondary small" data-action="compare-example" data-id="${esc(ex.conversation_id)}" data-left="${ex.left_evaluation_id}" data-right="${ex.right_evaluation_id}">${esc(ex.conversation_id)} · К${ex.criteria.join(", К")}</button>`).join("")}</details>`).join("") || '<p>Пока нет общих диалогов у разных конфигураций.</p>'}</div>
     <div class="section-card"><h2>Границы выводов</h2><p>Это анализ предоставленного набора, в котором чаты синтетические. Частоты описывают эту выборку. В данных нет CRM-результатов, CSAT и идентификатора клиента: FCR, отток, денежный эффект и склейка сессий здесь не измеряются. Апелляции доступны в карточке диалога; эта карта использует исходную AI-оценку.</p></div>`;
@@ -671,7 +786,7 @@ async function settingsModal() {
       )
       .join(
         "",
-      )}</select></label><label class="field">Режим Gemini<select id="reasoning-effort"><option value="low" ${!["default","medium","high"].includes(settings.reasoning_effort) ? "selected" : ""}>Быстрый — low</option><option value="medium" ${settings.reasoning_effort === "medium" ? "selected" : ""}>Подробный — medium</option><option value="high" ${settings.reasoning_effort === "high" ? "selected" : ""}>Подробный — high</option><option value="default" ${settings.reasoning_effort === "default" ? "selected" : ""}>Стандартный режим модели</option></select><small>Влияет на рассуждение Gemini. Скорость и качество нужно проверять на данных.</small></label><label class="field">Базовый URL<input id="base-url" type="url" required value="${esc(settings.base_url)}"></label><label class="field">Название модели<input id="model-name" placeholder="Точное имя модели у провайдера" value="${esc(settings.model)}"></label><label class="field">API-ключ<input id="api-key" type="password" autocomplete="off" placeholder="${settings.key_configured ? "Ключ уже задан; оставьте пустым для сохранения" : "Ключ доступа к модели"}"><small>Для локальной Ollama ключ обычно не нужен.</small></label><div class="form-row"><label class="field">Вход, $ за 1 млн токенов<input id="input-price" type="number" min="0" step="0.001" value="${settings.input_price ?? ""}" placeholder="Неизвестно"></label><label class="field">Выход, $ за 1 млн токенов<input id="output-price" type="number" min="0" step="0.001" value="${settings.output_price ?? ""}" placeholder="Неизвестно"></label></div><div class="form-help">Облачная модель получает текст выбранного диалога и чек-лист при запуске проверки. Без настроенной модели доступны черновые правила и ручной пересмотр.</div></form>`,
+      )}</select></label><label class="field">Режим Gemini для текста<select id="reasoning-effort"><option value="low" ${!["default","medium","high"].includes(settings.reasoning_effort) ? "selected" : ""}>Быстрый — low</option><option value="medium" ${settings.reasoning_effort === "medium" ? "selected" : ""}>Подробный — medium</option><option value="high" ${settings.reasoning_effort === "high" ? "selected" : ""}>Подробный — high</option><option value="default" ${settings.reasoning_effort === "default" ? "selected" : ""}>Стандартный режим модели</option></select><small>Влияет на рассуждение Gemini. Скорость и качество нужно проверять на данных.</small></label><label class="field">Базовый URL<input id="base-url" type="url" required value="${esc(settings.base_url)}"></label><label class="field">Название модели<input id="model-name" placeholder="Точное имя модели у провайдера" value="${esc(settings.model)}"></label><label class="field">API-ключ<input id="api-key" type="password" autocomplete="off" placeholder="${settings.key_configured ? "Ключ уже задан; оставьте пустым для сохранения" : "Ключ доступа к модели"}"><small>Для локальной Ollama ключ обычно не нужен.</small></label><div class="form-row"><label class="field">Вход, $ за 1 млн токенов<input id="input-price" type="number" min="0" step="0.001" value="${settings.input_price ?? ""}" placeholder="Неизвестно"></label><label class="field">Выход, $ за 1 млн токенов<input id="output-price" type="number" min="0" step="0.001" value="${settings.output_price ?? ""}" placeholder="Неизвестно"></label></div><div class="form-help">Текстовая проверка отправляет модели транскрипт и чек-лист. Кнопка «Проанализировать звук» отправляет саму запись в Gemini. Цены в этих полях используются для текстовых проверок; стоимость аудио пока не вычисляется. Без модели доступны прослушивание и ручной пересмотр.</div></form>`,
     `<button class="button secondary" data-action="close-modal">Отмена</button><button class="button primary" data-action="save-settings">Сохранить настройки</button>`,
   );
 }
@@ -877,6 +992,32 @@ document.addEventListener("click", async (event) => {
   const action = button.dataset.action;
   try {
     switch (action) {
+      case "channel-tab":
+        await chooseChannel(button.dataset.channel);
+        break;
+      case "result-mode":
+        resultsMode = button.dataset.mode;
+        renderResults();
+        break;
+      case "audio-info":
+        await loadAudioInfo();
+        break;
+      case "analyze-audio":
+        await analyzeAudio();
+        break;
+      case "audio-seek":
+        seekAudio(Number(button.dataset.start),Number(button.dataset.end));
+        break;
+      case "audio-review":
+        await reviewAudio(button);
+        break;
+      case "open-audio-event":
+        $("#channel").value = "voice call";
+        switchView("dialogs");
+        await selectConversation(button.dataset.id);
+        resultsMode = "audio";renderResults();
+        seekAudio(Number(button.dataset.start),Number(button.dataset.end));
+        break;
       case "select":
         await selectConversation(button.dataset.id);
         break;
@@ -1037,6 +1178,7 @@ document.addEventListener("change", (event) => {
     analyticsSelection = {topic:"",criterion:null,outcome:"",friction:false};
     renderAnalytics();
   }
+  if (event.target.id === "channel") renderStats();
   if (event.target.id === "submission-set") updateSubmissionGroups();
   if (["submission-group", "submission-team"].includes(event.target.id))
     clearSubmissionReport();

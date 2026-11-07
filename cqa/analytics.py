@@ -76,6 +76,7 @@ def comparisons(evaluations, attempts):
         if not meta.get('attempt_id'):g['legacy_saved']+=1
         g['latest'][e['conversation_id']]=e
     for a in attempts:
+        if a['meta'].get('kind')=='audio':continue
         meta=a['meta'];g=get(meta,meta.get('checklist_hash'))
         g['traced_attempts']+=1;g[a['status']]+=1
         if a['status']!='running' and isinstance(meta.get('elapsed_seconds'),(int,float)):
@@ -155,4 +156,5 @@ def build_analytics(store, filters=None):
                         'stale':stale_count,'friction':sum(bool(r['friction']) for r in rows)},
             'criteria':[{'id':c['id'],'name':c['name'],'is_gross':c.get('is_gross',False)} for c in config['criteria']],
             'topics':matrix,'rows':rows,'outcomes':dict(outcomes),
-            'comparison':comparisons(evaluations,[a for a in all_attempts if a['conversation_id'] in ids])}
+            'comparison':comparisons(evaluations,[a for a in all_attempts if a['conversation_id'] in ids]),
+            'audio':store.audio_summary({r['conversation_id'] for r in records if r['channel']=='voice call'})}

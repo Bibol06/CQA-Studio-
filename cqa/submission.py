@@ -58,7 +58,7 @@ def snapshot(store, group):
             WHERE c.dataset=? ORDER BY j.id''', (group,)).fetchall()
     return {'records': [json.loads(r['payload']) for r in rows], 'config': config,
             'evaluations': {r['conversation_id']: json.loads(r['payload']) for r in evaluations},
-            'jobs': [{**dict(r), 'payload': json.loads(r['payload'])} for r in jobs]}
+            'jobs': [{**dict(r), 'payload': json.loads(r['payload'])} for r in jobs if json.loads(r['payload']).get('kind','text')!='audio']}
 
 
 def catalog(store):

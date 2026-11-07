@@ -15,6 +15,7 @@ from cqa.store import Store
 from cqa.queue import Worker
 from cqa.submission import catalog,build,snapshot,write_document
 from cqa.analytics import build_analytics
+from cqa.media import AudioMedia,byte_range
 
 ROOT=Path(__file__).resolve().parent
 STATIC=ROOT/'static'
@@ -32,12 +33,16 @@ def make_server(port=8765,db_path=None):
     import threading
     lock=threading.Lock()
     evaluate_lock=threading.Lock()
+    media=AudioMedia(store.record)
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,fmt,*args): pass
         def write_json(self,obj,status=200):
             raw=json.dumps(obj,ensure_ascii=False,allow_nan=False).encode()
             self.send_response(status); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(raw)))
-            self.send_header('Cache-Control','no-store'); self.send_header('X-Content-Type-Options','nosniff'); self.end_headers(); self.wfile.write(raw)
+            self.send_header('Cache-Control','no-store'); self.send_header('X-Content-Type-Options','nosniff'); self.end_headers()
+            if self.command!='HEAD':
+                try:self.wfile.write(raw)
+                except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
         def body(self):
             if self.headers.get_content_type()!='application/json': raise ValueError('Ожидается application/json')
             length=int(self.headers.get('Content-Length','0'))
@@ -48,12 +53,35 @@ def make_server(port=8765,db_path=None):
             if self.headers.get('Host') not in allowed: return False
             origin=self.headers.get('Origin')
             return not origin or origin in ['http://'+host for host in allowed]
+        def write_audio(self,cid,head=False):
+            clip=media.get(cid);size=len(clip.data)
+            try:start,end,status=byte_range(self.headers.get('Range'),size)
+            except ValueError:
+                self.send_response(416);self.send_header('Content-Range',f'bytes */{size}');self.send_header('Content-Length','0');self.end_headers();return
+            self.send_response(status);self.send_header('Content-Type',clip.mime_type)
+            self.send_header('Accept-Ranges','bytes');self.send_header('Content-Length',str(end-start+1))
+            if status==206:self.send_header('Content-Range',f'bytes {start}-{end}/{size}')
+            self.send_header('Cache-Control','private, no-store');self.send_header('X-Content-Type-Options','nosniff');self.end_headers()
+            if not head:
+                try:
+                    for pos in range(start,end+1,65536):self.wfile.write(clip.data[pos:min(pos+65536,end+1)])
+                except (BrokenPipeError,ConnectionResetError,ConnectionAbortedError):pass
+        def do_HEAD(self):
+            if not self.trusted():return self.write_json({'error':'Неверный источник запроса'},403)
+            path=unquote(urlparse(self.path).path)
+            if not path.startswith('/api/audio/'):return self.write_json({'error':'Не найдено'},404)
+            try:self.write_audio(path.split('/')[-1],True)
+            except ValueError as error:self.write_json({'error':str(error)},400)
         def do_GET(self):
             if not self.trusted(): return self.write_json({'error':'Неверный источник запроса'},403)
             path=unquote(urlparse(self.path).path)
             try:
                 if path=='/api/state': return self.write_json({**store.overview(),'queue_counts':store.jobs()['counts']})
                 if path=='/api/jobs': return self.write_json({**store.jobs(),'worker':worker.health()})
+                if path.startswith('/api/audio-info/'):
+                    cid=path.split('/')[-1];info=media.get(cid).info();history=store.audio_history(cid)
+                    return self.write_json({**info,'analysis_matches_audio':bool(history and history[0]['result']['audio']['sha256']==info['sha256'])})
+                if path.startswith('/api/audio/'):return self.write_audio(path.split('/')[-1])
                 if path=='/api/analytics':
                     filters=dict(parse_qsl(urlparse(self.path).query))
                     if any(k not in ['dataset_group','language','channel'] for k in filters):raise ValueError('Неизвестный фильтр аналитики')
@@ -64,7 +92,7 @@ def make_server(port=8765,db_path=None):
                 if path=='/api/submission/catalog':return self.write_json({'groups':catalog(store),'team_name':store.submission_team()})
                 if path=='/api/health':
                     health=worker.health()
-                    return self.write_json({'ok':health['alive'] and health['state'] not in ['storage_error','error','stopped'],'version':'0.5.1','benchmark_variants':['A','B'],'background_queue':True,'insights':True,'analytics':True,'submission_schema':'1.0','worker':health})
+                    return self.write_json({'ok':health['alive'] and health['state'] not in ['storage_error','error','stopped'],'version':'0.6.0','benchmark_variants':['A','B'],'background_queue':True,'insights':True,'analytics':True,'audio_analysis':True,'submission_schema':'1.0','worker':health})
                 if path.startswith('/api/'): return self.write_json({'error':'Не найдено'},404)
                 target=STATIC/('index.html' if path=='/' else path.lstrip('/'))
                 if not target.resolve().is_relative_to(STATIC.resolve()) or not target.is_file(): return self.write_json({'error':'Не найдено'},404)
@@ -89,7 +117,10 @@ def make_server(port=8765,db_path=None):
                     store.submission_team(document['team_name'])
                     return self.write_json({'report':report,'path':saved,'document':document})
                 if path=='/api/jobs':
-                    result=store.enqueue(body.get('conversation_ids'),body.get('variant','B'));worker.wake.set();return self.write_json(result,202)
+                    result=store.enqueue(body.get('conversation_ids'),body.get('variant','B'),body.get('kind','text'));worker.wake.set();return self.write_json(result,202)
+                if path=='/api/audio-reviews':
+                    store.audio_review(body.get('analysis_id'),body.get('event_index'),body.get('verdict'),body.get('note',''))
+                    return self.write_json({'ok':True})
                 if path=='/api/jobs/resume':store.resume_jobs();worker.wake.set();return self.write_json(store.jobs())
                 if path.startswith('/api/jobs/'):
                     parts=path.split('/');jid=int(parts[-2]);action=parts[-1]
@@ -167,7 +198,7 @@ def make_server(port=8765,db_path=None):
             super().server_close()
     server=Server(('127.0.0.1',port),Handler)
     server.daemon_threads=True
-    worker=Worker(store,key_for,evaluate_lock);server.worker=worker;server.store=store
+    worker=Worker(store,key_for,evaluate_lock,media=media,reload_audio=os.environ.get('CQA_RELOAD_AUDIO')=='1');server.worker=worker;server.store=store;server.media=media
     return server
 
 if __name__=='__main__':

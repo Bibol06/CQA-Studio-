@@ -3,16 +3,21 @@ from datetime import datetime, timezone
 import sqlite3
 import threading
 import time
+import importlib
 
 from .engine import rules_review
 from .providers import call_model, attempt_meta
+from .audio_analysis import call_audio, audio_attempt_meta
+from .media import AudioMedia
 
 
 class Worker:
-    def __init__(self, store, key_for, evaluate_lock, start=True):
+    def __init__(self, store, key_for, evaluate_lock, start=True, media=None, reload_audio=False):
         self.store = store
         self.key_for = key_for
         self.evaluate_lock = evaluate_lock
+        self.media = media or AudioMedia(store.record)
+        self.reload_audio = reload_audio
         self.wake = threading.Event()
         self.stop = threading.Event()
         self.pending = None
@@ -36,12 +41,15 @@ class Worker:
     def finish_pending(self):
         item = self.pending
         self.status('saving', job_id=item['id'])
-        if item['kind'] == 'result':
+        if item['kind'] in ['result','audio_result']:
             # COMMIT can have succeeded even if an I/O error was reported afterwards.
             checkpoint = self.store.job_checkpoint(item['id'])
             if checkpoint['status'] != 'completed':
-                self.store.save_evaluation(item['cid'], item['config'], item['answers'],
-                                           item['meta'], item['insights'], item['id'])
+                if item['kind']=='audio_result':
+                    self.store.save_audio_analysis(item['cid'],item['result'],item['meta'],item['id'])
+                else:
+                    self.store.save_evaluation(item['cid'], item['config'], item['answers'],
+                                               item['meta'], item['insights'], item['id'])
         else:
             self.store.finish_job_error(item['id'], item['error'], item.get('pause', False), item.get('meta'))
         self.pending = None
@@ -54,6 +62,7 @@ class Worker:
         for job in self.store.candidates():
             payload = job['payload']
             settings = payload['settings']
+            kind = payload.get('kind','text')
             key = self.key_for(settings)
             if settings['provider'] not in ['rules', 'ollama'] and not key:
                 if job['status'] != 'waiting_key':
@@ -65,6 +74,13 @@ class Worker:
                 # A failed read leaves an unstarted job queued, without a model call.
                 record = self.store.record(job['conversation_id'])
                 config = payload['checklist']
+                audio_call=call_audio
+                audio_meta=audio_attempt_meta
+                # Explicit local development mode: reload trusted code while keeping
+                # credentials in the server's memory. Never enabled by request data.
+                if kind=='audio' and self.reload_audio:
+                    module=importlib.reload(importlib.import_module('cqa.audio_analysis'))
+                    audio_call=module.call_audio;audio_meta=module.audio_attempt_meta
                 try:
                     claimed = self.store.job_state(job['id'], 'running')
                 except sqlite3.Error:
@@ -76,25 +92,32 @@ class Worker:
                 self.status('processing', job_id=job['id'])
                 aid=None
                 started=time.monotonic()
+                initial_meta=audio_meta(settings) if kind=='audio' else attempt_meta(config,settings,payload['variant'])
                 try:
-                    if settings['provider'] == 'rules':
+                    if settings['provider']!='rules':
+                        try:
+                            aid=self.store.start_attempt(job['conversation_id'],initial_meta,job['id'])
+                        except sqlite3.Error:
+                            self.pending={'kind':'error','id':job['id'],'error':'Не удалось сохранить начало запроса. Модель не вызывалась; повтор доступен вручную.'}
+                            raise
+                    if kind=='audio':
+                        result,meta=audio_call(record,settings,key,self.media)
+                        self.pending={'kind':'audio_result','id':job['id'],'cid':job['conversation_id'],
+                                      'result':result,'meta':{**initial_meta,**meta,'attempt_id':aid}}
+                    elif settings['provider'] == 'rules':
                         answers = rules_review(record, config)
                         meta = {'provider': 'rules', 'model': 'Проверка правил', 'calls': 0,
                                 'elapsed_seconds': 0, 'usage': {}, 'cost_usd': None}
                         insights = None
                     else:
-                        try:
-                            aid=self.store.start_attempt(job['conversation_id'],attempt_meta(config,settings,payload['variant']),job['id'])
-                        except sqlite3.Error:
-                            self.pending={'kind':'error','id':job['id'],'error':'Не удалось сохранить начало запроса. Модель не вызывалась; повтор доступен вручную.'}
-                            raise
                         answers, meta, insights = call_model(record, config, settings, key, payload['variant'])
-                        meta={**attempt_meta(config,settings,payload['variant']),**meta,'attempt_id':aid}
-                    self.pending = {'kind': 'result', 'id': job['id'], 'cid': job['conversation_id'],
-                                    'config': config, 'answers': answers, 'meta': meta, 'insights': insights}
+                        meta={**initial_meta,**meta,'attempt_id':aid}
+                    if kind!='audio':
+                        self.pending = {'kind': 'result', 'id': job['id'], 'cid': job['conversation_id'],
+                                        'config': config, 'answers': answers, 'meta': meta, 'insights': insights}
                 except ValueError as error:
                     message = str(error)[:1000]
-                    meta=getattr(error,'meta',None) or {**attempt_meta(config,settings,payload['variant']),
+                    meta=getattr(error,'meta',None) or {**initial_meta,
                                                        'elapsed_seconds':round(time.monotonic()-started,2)}
                     self.pending = {'kind': 'error', 'id': job['id'], 'error': message,
                                     'meta':meta,
@@ -103,7 +126,7 @@ class Worker:
                     raise
                 except Exception:
                     self.pending = {'kind': 'error', 'id': job['id'],
-                                    'meta':{**attempt_meta(config,settings,payload['variant']),'elapsed_seconds':round(time.monotonic()-started,2)},
+                                    'meta':{**initial_meta,'elapsed_seconds':round(time.monotonic()-started,2)},
                                     'error': 'Не удалось выполнить обработку. Предыдущая оценка сохранена; повтор доступен вручную.'}
                 return self.finish_pending()
         self.status('idle')
