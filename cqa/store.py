@@ -20,6 +20,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS evaluations(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,checklist_version INTEGER NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS appeals(id INTEGER PRIMARY KEY AUTOINCREMENT,evaluation_id INTEGER NOT NULL,criterion_id INTEGER NOT NULL,comment TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',value TEXT,reason TEXT,created_at TEXT NOT NULL,resolved_at TEXT);
             CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1),payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,error TEXT,evaluation_id INTEGER,attempts INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
             ''')
             if 'dataset' not in [r['name'] for r in db.execute('PRAGMA table_info(conversations)')]:
@@ -131,6 +132,13 @@ class Store:
         return json.loads(r[0]) if r else {'provider':'rules','base_url':'https://api.openai.com/v1','model':'','input_price':None,'output_price':None}
     def save_settings(self,settings):
         with self.db() as db: db.execute('INSERT OR REPLACE INTO settings VALUES(1,?)',(dumps(settings),))
+    def submission_team(self,value=None):
+        with self.db() as db:
+            if value is not None:
+                if not isinstance(value,str) or not value.strip() or len(value.strip())>100:raise ValueError('Укажите название команды до 100 символов')
+                db.execute('INSERT OR REPLACE INTO preferences(key,value) VALUES(?,?)',('submission_team',value.strip()))
+            row=db.execute('SELECT value FROM preferences WHERE key=?',('submission_team',)).fetchone()
+        return row[0] if row else ''
     def export(self):
         with self.db() as db: ids=[r[0] for r in db.execute('SELECT id FROM evaluations ORDER BY id')]
         return {'exported_at':now(),'checklist':self.config(),'evaluations':[self.evaluation(i) for i in ids]}

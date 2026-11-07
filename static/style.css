@@ -1767,6 +1767,45 @@ dialog::backdrop {
 .review-workspace {
   overflow: clip;
 }
+.submission-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr;
+  gap: 16px;
+  margin-top: 22px;
+}
+.submission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+.submission-result {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7faf4;
+}
+.submission-result h3 {
+  margin: 0 0 12px;
+}
+.submission-warning {
+  color: #94631b;
+}
+.submission-errors {
+  max-height: 290px;
+  overflow: auto;
+}
+.saved-path {
+  overflow-wrap: anywhere;
+  font-family: monospace;
+}
+@media (max-width: 900px) {
+  .submission-fields {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
 @media (max-width: 800px) {
   .help-grid {
     grid-template-columns: 1fr;

@@ -12,6 +12,7 @@ from cqa.engine import rules_review
 from cqa.providers import call_model,safe_endpoint
 from cqa.store import Store
 from cqa.queue import Worker
+from cqa.submission import catalog,build,snapshot,write_document
 
 ROOT=Path(__file__).resolve().parent
 STATIC=ROOT/'static'
@@ -54,7 +55,8 @@ def make_server(port=8765,db_path=None):
                 if path.startswith('/api/conversations/'): return self.write_json(store.detail(path.split('/')[-1]))
                 if path=='/api/settings': return self.write_json({**store.settings(),'key_configured':bool(key_for(store.settings()))})
                 if path=='/api/export': return self.write_json(store.export())
-                if path=='/api/health': return self.write_json({'ok':True,'version':'0.3.0','benchmark_variants':['A','B'],'background_queue':True,'insights':True})
+                if path=='/api/submission/catalog':return self.write_json({'groups':catalog(store),'team_name':store.submission_team()})
+                if path=='/api/health': return self.write_json({'ok':True,'version':'0.4.0','benchmark_variants':['A','B'],'background_queue':True,'insights':True,'submission_schema':'1.0'})
                 if path.startswith('/api/'): return self.write_json({'error':'Не найдено'},404)
                 target=STATIC/('index.html' if path=='/' else path.lstrip('/'))
                 if not target.resolve().is_relative_to(STATIC.resolve()) or not target.is_file(): return self.write_json({'error':'Не найдено'},404)
@@ -69,6 +71,14 @@ def make_server(port=8765,db_path=None):
             path=unquote(urlparse(self.path).path)
             try:
                 body=self.body()
+                if path in ['/api/submission/preview','/api/submission/export']:
+                    kind=body.get('set');group=body.get('group')
+                    document,report=build(store,kind,group,body.get('team_name'))
+                    if path.endswith('/preview'):return self.write_json({'report':report})
+                    destination=ROOT/report['relative_path']
+                    saved=write_document(document,snapshot(store,group)['records'],kind,destination,ROOT/'data/submission_backups')
+                    store.submission_team(document['team_name'])
+                    return self.write_json({'report':report,'path':saved,'document':document})
                 if path=='/api/jobs':
                     result=store.enqueue(body.get('conversation_ids'),body.get('variant','B'));worker.wake.set();return self.write_json(result,202)
                 if path=='/api/jobs/resume':store.resume_jobs();worker.wake.set();return self.write_json(store.jobs())

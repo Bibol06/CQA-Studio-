@@ -413,6 +413,11 @@ function switchView(next) {
       "От первого запуска до защиты",
       "Пошаговая инструкция, устройство системы и честные формулировки для презентации.",
     ],
+    submission: [
+      "Сдача жюри",
+      "Результаты в официальном формате",
+      "JSON 1.0: все ID набора, исходные оценки AI и явные ошибки обработки.",
+    ],
   };
   $("#breadcrumb").textContent = titles[next][0];
   $("#page-title").innerHTML = esc(titles[next][1]) + "<span>.</span>";
@@ -425,6 +430,8 @@ function switchView(next) {
   if (next === "analytics") renderAnalytics();
   if (next === "queue") renderQueue();
   if (next === "help") renderHelp();
+  if (next === "submission")
+    loadSubmission().catch((error) => toast(error.message));
 }
 function activeJob() {
   return jobsState.jobs.find(
@@ -704,6 +711,79 @@ async function submitResolve(aid) {
   await selectConversation(selected);
   toast("Решение сохранено. Итог пересчитан, исходная оценка сохранена.");
 }
+let submissionCatalog = [],
+  submissionDocument = null,
+  submissionGeneration = 0;
+async function loadSubmission() {
+  const catalog = await api("submission/catalog");
+  submissionCatalog = catalog.groups;
+  submissionDocument = null;
+  $("#view-submission").innerHTML =
+    `<div class="section-card"><h2>Подготовка файлов для жюри</h2><p>DEV: 60 чатов и 5 звонков. Контроль: 10 чатов из отдельной группы. Все диалоги попадут в файл; неоценённые сохраняются со статусом error.</p><div class="submission-fields"><label class="field">Название команды<input id="submission-team" maxlength="100" placeholder="Как в регистрации" value="${esc(catalog.team_name)}"></label><label class="field">Набор<select id="submission-set"><option value="dev">DEV — 65 диалогов</option><option value="prod">Контроль — 10 чатов</option></select></label><label class="field">Группа исходных данных<select id="submission-group"></select></label></div><div class="form-help">Для сравнения с эталоном используются исходные ответы модели. Решения по апелляциям, персональные настройки, ключи и полные транскрипты в этот файл не включаются. Обычная выгрузка истории доступна по кнопке сверху.</div><div class="submission-actions"><button class="button secondary" data-action="preview-submission">${icon("check")}Проверить готовность</button><button class="button primary" data-action="save-submission">${icon("download")}Сохранить файл для жюри</button></div><div id="submission-report" aria-live="polite"></div></div><div class="section-card"><h2>После сохранения</h2><p>Файлы сохраняются в корне этого проекта: <code>results/dev/results.json</code> и <code>results/prod/results.json</code>. Резервная копия прежнего файла остаётся в локальной папке data.</p><p>Сохранение не отправляет работу организаторам. До стоп-кода нужны commit и push в открытый репозиторий, ссылка на который передана организаторам. На получение и обработку контрольного набора, проверку и отправку даётся один час.</p><p>Если контроль ещё не получен, его файл не создаётся. Нельзя заменять его DEV-диалогами или вымышленными ID.</p></div>`;
+  updateSubmissionGroups();
+}
+function updateSubmissionGroups() {
+  const kind = $("#submission-set").value;
+  const groups = submissionCatalog.filter((g) =>
+    kind === "prod" ? g.id.toUpperCase() !== "DEV" : true,
+  );
+  $("#submission-group").innerHTML = groups.length
+    ? groups
+        .map(
+          (g) =>
+            `<option value="${esc(g.id)}" ${kind === "dev" && g.id === "DEV" ? "selected" : ""}>${esc(g.id)} · ${g.total} диалогов (${g.chats} чатов, ${g.calls} звонков)</option>`,
+        )
+        .join("")
+    : '<option value="">Контрольный набор ещё не импортирован</option>';
+  clearSubmissionReport();
+}
+function clearSubmissionReport() {
+  submissionGeneration++;
+  submissionDocument = null;
+  $("#submission-report").innerHTML = "";
+}
+function submissionInput() {
+  return {
+    set: $("#submission-set").value,
+    group: $("#submission-group").value,
+    team_name: $("#submission-team").value.trim(),
+  };
+}
+function showSubmissionReport(report, savedPath = null) {
+  $("#submission-report").innerHTML =
+    `<div class="submission-result"><h3>${savedPath ? "Файл сохранён локально" : "Проверка формата пройдена"}</h3><p><strong>${esc(report.relative_path)}</strong> · ${report.total} записей · ok: ${report.ok} · error: ${report.errors.length}</p><p>${esc(report.model.name)} · ${esc(report.model.mode)} · чек-лист v${report.checklist_version}</p>${report.errors.length ? '<p class="submission-warning">Файл соответствует схеме, но часть диалогов не оценена. Это ошибки обработки, а не нулевые баллы. Для улучшения результата выполните недостающие проверки.</p>' : "<p>Все диалоги имеют полные оценки. Это проверка формата, а не измерение точности модели.</p>"}${report.needs_review_criteria ? `<p>Критериев с отметкой «нужна проверка»: ${report.needs_review_criteria}. Совпадение цитаты не гарантирует правильность вывода.</p>` : ""}${report.errors.length ? `<details><summary>Причины error · ${report.errors.length}</summary><div class="submission-errors"><table class="data-table"><thead><tr><th>ID</th><th>ПРИЧИНА</th></tr></thead><tbody>${report.errors.map((r) => `<tr><td>${esc(r.conversation_id)}</td><td>${esc(r.error)}</td></tr>`).join("")}</tbody></table></div></details>` : ""}${savedPath ? `<p class="saved-path">${esc(savedPath)}</p><p>Проверьте commit и push в открытый репозиторий перед сдачей.</p><button class="button secondary" data-action="download-submission">Скачать копию JSON</button>` : ""}</div>`;
+}
+async function prepareSubmission(save) {
+  const generation = ++submissionGeneration;
+  const response = await api(
+    save ? "submission/export" : "submission/preview",
+    submissionInput(),
+  );
+  if (generation !== submissionGeneration || view !== "submission") {
+    if (save)
+      toast(
+        "Сохранён " +
+          response.report.relative_path +
+          "; выбранные параметры уже изменены.",
+      );
+    return;
+  }
+  submissionDocument = response.document || null;
+  showSubmissionReport(response.report, response.path);
+  if (save)
+    toast("Файл для жюри сохранён в проекте. Следующий шаг — commit и push.");
+}
+function downloadJson(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2) + "\n"], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob),
+    a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 async function exportResults() {
   const data = await api("export");
   const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -794,6 +874,19 @@ document.addEventListener("click", async (event) => {
       case "export":
         await exportResults();
         break;
+      case "preview-submission":
+      case "save-submission":
+        button.disabled = true;
+        try {
+          await prepareSubmission(action === "save-submission");
+        } finally {
+          button.disabled = false;
+        }
+        break;
+      case "download-submission":
+        if (submissionDocument)
+          downloadJson(submissionDocument, "results.json");
+        break;
       case "appeal":
         appealModal(Number(button.dataset.id));
         break;
@@ -839,6 +932,9 @@ document.addEventListener("click", async (event) => {
   }
 });
 document.addEventListener("change", (event) => {
+  if (event.target.id === "submission-set") updateSubmissionGroups();
+  if (["submission-group", "submission-team"].includes(event.target.id))
+    clearSubmissionReport();
   if (["language", "channel", "status"].includes(event.target.id)) renderList();
   if (event.target.id === "context-toggle") {
     showContext = event.target.checked;
@@ -858,6 +954,9 @@ document.addEventListener("change", (event) => {
               ? "https://api.example.com/v1"
               : $("#base-url").value;
   }
+});
+document.addEventListener("input", (event) => {
+  if (event.target.id === "submission-team") clearSubmissionReport();
 });
 $("#search").addEventListener("input", renderList);
 $("#modal").addEventListener("click", (event) => {
