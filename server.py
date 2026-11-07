@@ -10,10 +10,11 @@ from urllib.parse import urlparse,unquote,parse_qsl,urlencode,urlunparse
 import urllib.request
 from cqa.domain import score
 from cqa.engine import rules_review
-from cqa.providers import call_model,safe_endpoint
+from cqa.providers import call_model,safe_endpoint,attempt_meta
 from cqa.store import Store
 from cqa.queue import Worker
 from cqa.submission import catalog,build,snapshot,write_document
+from cqa.analytics import build_analytics
 
 ROOT=Path(__file__).resolve().parent
 STATIC=ROOT/'static'
@@ -53,13 +54,17 @@ def make_server(port=8765,db_path=None):
             try:
                 if path=='/api/state': return self.write_json({**store.overview(),'queue_counts':store.jobs()['counts']})
                 if path=='/api/jobs': return self.write_json({**store.jobs(),'worker':worker.health()})
+                if path=='/api/analytics':
+                    filters=dict(parse_qsl(urlparse(self.path).query))
+                    if any(k not in ['dataset_group','language','channel'] for k in filters):raise ValueError('Неизвестный фильтр аналитики')
+                    return self.write_json(build_analytics(store,filters))
                 if path.startswith('/api/conversations/'): return self.write_json(store.detail(path.split('/')[-1]))
                 if path=='/api/settings': return self.write_json({**store.settings(),'key_configured':bool(key_for(store.settings()))})
                 if path=='/api/export': return self.write_json(store.export())
                 if path=='/api/submission/catalog':return self.write_json({'groups':catalog(store),'team_name':store.submission_team()})
                 if path=='/api/health':
                     health=worker.health()
-                    return self.write_json({'ok':health['alive'] and health['state'] not in ['storage_error','error','stopped'],'version':'0.4.1','benchmark_variants':['A','B'],'background_queue':True,'insights':True,'submission_schema':'1.0','worker':health})
+                    return self.write_json({'ok':health['alive'] and health['state'] not in ['storage_error','error','stopped'],'version':'0.5.0','benchmark_variants':['A','B'],'background_queue':True,'insights':True,'analytics':True,'submission_schema':'1.0','worker':health})
                 if path.startswith('/api/'): return self.write_json({'error':'Не найдено'},404)
                 target=STATIC/('index.html' if path=='/' else path.lstrip('/'))
                 if not target.resolve().is_relative_to(STATIC.resolve()) or not target.is_file(): return self.write_json({'error':'Не найдено'},404)
@@ -134,7 +139,15 @@ def make_server(port=8765,db_path=None):
                         try:
                             if settings['provider']=='rules':
                                 answers=rules_review(record,config); meta={'provider':'rules','model':'Проверка правил','calls':0,'elapsed_seconds':0,'usage':{},'cost_usd':None};insights=None
-                            else: answers,meta,insights=call_model(record,config,settings,key_for(settings),body.get('variant','B'))
+                            else:
+                                variant=body.get('variant','B');initial_meta=attempt_meta(config,settings,variant)
+                                aid=store.start_attempt(cid,initial_meta)
+                                try:
+                                    answers,meta,insights=call_model(record,config,settings,key_for(settings),variant)
+                                    meta={**initial_meta,**meta,'attempt_id':aid}
+                                except ValueError as error:
+                                    store.fail_attempt(aid,str(error),getattr(error,'meta',initial_meta))
+                                    raise
                             return self.write_json(store.save_evaluation(cid,config,answers,meta,insights))
                         finally:evaluate_lock.release()
                     finally:

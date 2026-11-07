@@ -2,9 +2,10 @@
 from datetime import datetime, timezone
 import sqlite3
 import threading
+import time
 
 from .engine import rules_review
-from .providers import call_model
+from .providers import call_model, attempt_meta
 
 
 class Worker:
@@ -42,7 +43,7 @@ class Worker:
                 self.store.save_evaluation(item['cid'], item['config'], item['answers'],
                                            item['meta'], item['insights'], item['id'])
         else:
-            self.store.finish_job_error(item['id'], item['error'], item.get('pause', False))
+            self.store.finish_job_error(item['id'], item['error'], item.get('pause', False), item.get('meta'))
         self.pending = None
         self.status('idle')
         return True
@@ -73,6 +74,8 @@ class Worker:
                 if not claimed:
                     continue
                 self.status('processing', job_id=job['id'])
+                aid=None
+                started=time.monotonic()
                 try:
                     if settings['provider'] == 'rules':
                         answers = rules_review(record, config)
@@ -80,15 +83,27 @@ class Worker:
                                 'elapsed_seconds': 0, 'usage': {}, 'cost_usd': None}
                         insights = None
                     else:
+                        try:
+                            aid=self.store.start_attempt(job['conversation_id'],attempt_meta(config,settings,payload['variant']),job['id'])
+                        except sqlite3.Error:
+                            self.pending={'kind':'error','id':job['id'],'error':'Не удалось сохранить начало запроса. Модель не вызывалась; повтор доступен вручную.'}
+                            raise
                         answers, meta, insights = call_model(record, config, settings, key, payload['variant'])
+                        meta={**attempt_meta(config,settings,payload['variant']),**meta,'attempt_id':aid}
                     self.pending = {'kind': 'result', 'id': job['id'], 'cid': job['conversation_id'],
                                     'config': config, 'answers': answers, 'meta': meta, 'insights': insights}
                 except ValueError as error:
                     message = str(error)[:1000]
+                    meta=getattr(error,'meta',None) or {**attempt_meta(config,settings,payload['variant']),
+                                                       'elapsed_seconds':round(time.monotonic()-started,2)}
                     self.pending = {'kind': 'error', 'id': job['id'], 'error': message,
+                                    'meta':meta,
                                     'pause': any(code in message for code in ['HTTP 429', 'HTTP 401', 'HTTP 403'])}
+                except sqlite3.Error:
+                    raise
                 except Exception:
                     self.pending = {'kind': 'error', 'id': job['id'],
+                                    'meta':{**attempt_meta(config,settings,payload['variant']),'elapsed_seconds':round(time.monotonic()-started,2)},
                                     'error': 'Не удалось выполнить обработку. Предыдущая оценка сохранена; повтор доступен вручную.'}
                 return self.finish_pending()
         self.status('idle')

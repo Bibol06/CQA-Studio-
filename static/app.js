@@ -402,7 +402,7 @@ function switchView(next) {
     analytics: [
       "Обзор качества",
       "Видеть общую картину",
-      "Результаты проверок, открытые апелляции и прозрачная история решений.",
+      "Темы обращений, повторные затруднения и сравнение запусков с переходом к исходным репликам.",
     ],
     queue: [
       "Очередь",
@@ -536,9 +536,16 @@ function evidenceButtons(items) {
     )
     .join("");
 }
+function renderRequestAnalysis(e) {
+  const items = e.meta.request_analysis || [];
+  const labels = {answered:"Оператор ответил",follow_up:"Обещано продолжение",unanswered:"Остался без ответа",not_enough_data:"Недостаточно данных"};
+  const warning = e.meta.outcome_conflict ? '<p class="submission-warning">Общий итог и отдельные вопросы расходятся. Проверьте выводы модели по репликам.</p>' : "";
+  return items.length ? `<section class="insights"><details open><summary>Отдельные вопросы клиента · ${items.length}</summary><p class="review-note">AI-разбор может пропускать вопросы: проверьте полноту по исходному тексту. Подтверждение банковской операции требует внешних данных.</p>${warning}${items.map(r => `<article class="recommendation"><span class="badge ${r.status === "answered" ? "green" : "amber"}">${labels[r.status]}</span><p><strong>${esc(r.request)}</strong></p>${evidenceButtons(r.request_evidence)}${evidenceButtons(r.answer_evidence)}</article>`).join("")}</details></section>` : (e.meta.requests_error ? `<p class="review-note">Разбор вопросов не прошёл проверку: ${esc(e.meta.requests_error)}. Оценки критериев сохранены.</p>` : "");
+}
 function renderInsights(e) {
+  const requests = renderRequestAnalysis(e);
   if (!e.insights)
-    return `<div class="insight-empty">${icon("info")}<span>Для этой проверки резюме ещё не сформировано. Новая AI-проверка добавит резюме и рекомендации; прежняя оценка останется в истории.</span></div>`;
+    return `<div class="insight-empty">${icon("info")}<span>${e.meta.insights_error ? "Резюме и рекомендации не прошли проверку: " + esc(e.meta.insights_error) + ". Оценки критериев сохранены." : "В этой проверке нет резюме и рекомендаций. Они формируются при новом запуске модели."}</span></div>${requests}`;
   const s = e.insights.summary,
     labels = {
       resolved: "Вопрос решён",
@@ -546,11 +553,11 @@ function renderInsights(e) {
       unresolved: "Вопрос не решён",
       not_enough_data: "Недостаточно данных",
     };
-  return `<section class="insights"><p class="review-note">AI-резюме и советы: проверьте выводы по исходным репликам.</p><details open><summary>Суть разговора <span class="badge ${s.status === "resolved" ? "green" : "amber"}">${labels[s.status]}</span></summary><dl><dt>Запрос клиента</dt><dd>${esc(s.request)}</dd><dt>Действия оператора</dt><dd>${esc(s.actions)}</dd><dt>Результат</dt><dd>${esc(s.outcome)}</dd></dl><details class="insight-sources"><summary>Основания резюме</summary>${evidenceButtons(s.evidence)}</details></details><details class="recommendations" ${e.insights.recommendations.length ? "open" : ""}><summary>Рекомендации · ${e.insights.recommendations.length}</summary>${e.appeals.some((a) => a.status === "resolved") ? '<p class="review-note">Советы сформированы по исходной AI-оценке. Сопоставьте их с последующими решениями проверяющего.</p>' : ""}${e.insights.recommendations.length ? e.insights.recommendations.map((r) => `<article class="recommendation"><span class="badge">Критерий ${r.criterion_id}</span><p><strong>Проблема:</strong> ${esc(r.issue)}</p><p><strong>Что улучшить:</strong> ${esc(r.action)}</p>${evidenceButtons(r.evidence)}</article>`).join("") : '<p class="review-note">По исходной оценке нарушений не обнаружено. Это не заменяет независимую проверку.</p>'}</details></section>`;
+  return `<section class="insights"><p class="review-note">AI-резюме и советы: проверьте выводы по исходным репликам.</p><details open><summary>Суть разговора <span class="badge ${s.status === "resolved" ? "green" : "amber"}">${labels[s.status]}</span></summary><dl><dt>Запрос клиента</dt><dd>${esc(s.request)}</dd><dt>Действия оператора</dt><dd>${esc(s.actions)}</dd><dt>Результат</dt><dd>${esc(s.outcome)}</dd></dl><details class="insight-sources"><summary>Основания резюме</summary>${evidenceButtons(s.evidence)}</details></details><details class="recommendations" ${e.insights.recommendations.length ? "open" : ""}><summary>Рекомендации · ${e.insights.recommendations.length}</summary>${e.appeals.some((a) => a.status === "resolved") ? '<p class="review-note">Советы сформированы по исходной AI-оценке. Сопоставьте их с последующими решениями проверяющего.</p>' : ""}${e.insights.recommendations.length ? e.insights.recommendations.map((r) => `<article class="recommendation"><span class="badge">Критерий ${r.criterion_id}</span><p><strong>Проблема:</strong> ${esc(r.issue)}</p><p><strong>Что улучшить:</strong> ${esc(r.action)}</p>${evidenceButtons(r.evidence)}</article>`).join("") : '<p class="review-note">По исходной оценке нарушений не обнаружено. Это не заменяет независимую проверку.</p>'}</details></section>${requests}`;
 }
 function renderHelp() {
   $("#view-help").innerHTML =
-    `<div class="help-grid"><article class="section-card"><span class="eyebrow">01 · НАЧАЛО РАБОТЫ</span><h2>Подключите данные и модель</h2><ol><li>В «Настройки модели» выберите Gemini, укажите ключ и сохраните. После перезапуска сервера ключ вводится заново.</li><li>«Загрузить данные» принимает JSON или получает группу DEV / контроль через API организаторов.</li><li>В списке найдите диалог по ID или тексту запроса. Фильтры ограничивают будущую выборку.</li></ol></article><article class="section-card"><span class="eyebrow">02 · ПРОВЕРКА</span><h2>Запустите и проверьте результат</h2><ol><li>«Проверить диалог» создаёт фоновое задание. «Проверить выборку» позволяет выбрать количество отфильтрованных диалогов.</li><li>В «Очередь» видны прогресс и ошибки. Можно обновлять страницу. Сервер должен продолжать работать.</li><li>В карточке появятся балл, резюме, рекомендации и оценки критериев. Нажатие на цитату выделяет исходные реплики.</li></ol></article><article class="section-card"><span class="eyebrow">03 · ПЕРЕСМОТР</span><h2>Оспорьте оценку</h2><ol><li>Нажмите «Оспорить оценку» рядом с критерием и опишите причину.</li><li>Нажмите «Рассмотреть», выберите ответ и напишите обоснование решения.</li><li>Итог пересчитается. Исходная оценка и все решения останутся в истории; рекомендации относятся к исходному анализу.</li></ol></article><article class="section-card"><span class="eyebrow">04 · НАСТРОЙКИ</span><h2>Измените чек-лист и сохраните результат</h2><ol><li>В «Чек-лист» меняйте правило, вес, ступени и доступность N/A, добавляйте критерии. Сохранение создаёт новую версию.</li><li>Запустите новую проверку: готовые оценки и уже поставленные задания сохраняют прежнюю версию.</li><li>«Обзор качества» показывает фактические баллы. Кнопка экспорта сверху сохраняет JSON с оценками, резюме, рекомендациями и решениями.</li></ol></article><article class="section-card"><h2>Как система получает результат</h2><p>API организаторов → исходный транскрипт → очередь → модель с текущим чек-листом → проверка значений и цитат → расчёт баллов кодом → сохранение в SQLite → интерфейс и апелляции.</p><p>Мы используем готовую модель. Собственные части проекта — интерфейс, очередь, редактор правил, проверка ответа, расчёт, хранение и процесс пересмотра.</p></article><article class="section-card"><h2>Что честно сказать жюри</h2><p>Начальная проверка: 6 диалогов, 48 ответов, 45 совпадений с предварительной разметкой ассистента. Это не точность на эталоне жюри. A/B ещё не завершён.</p><p>Цитаты проверяются по существованию и точности текста, но их смысловую достаточность проверяет человек. Тарифы без базы знаний и интонацию без аудио система не должна выдумывать. Очередь повышает надёжность, а не гарантирует ускорение модели.</p></article></div>`;
+    `<div class="help-grid"><article class="section-card"><span class="eyebrow">01 · НАЧАЛО РАБОТЫ</span><h2>Подключите данные и модель</h2><ol><li>В «Настройки модели» выберите Gemini, укажите ключ и сохраните. После перезапуска сервера ключ вводится заново.</li><li>«Загрузить данные» принимает JSON или получает группу DEV / контроль через API организаторов.</li><li>В списке найдите диалог по ID или тексту запроса. Фильтры ограничивают будущую выборку.</li></ol></article><article class="section-card"><span class="eyebrow">02 · ПРОВЕРКА</span><h2>Запустите и проверьте результат</h2><ol><li>«Проверить диалог» создаёт фоновое задание. «Проверить выборку» позволяет выбрать количество отфильтрованных диалогов.</li><li>В «Очередь» видны прогресс и ошибки. Можно обновлять страницу. Сервер должен продолжать работать.</li><li>В карточке появятся балл, резюме, рекомендации и оценки критериев. Нажатие на цитату выделяет исходные реплики.</li></ol></article><article class="section-card"><span class="eyebrow">03 · ПЕРЕСМОТР</span><h2>Оспорьте оценку</h2><ol><li>Нажмите «Оспорить оценку» рядом с критерием и опишите причину.</li><li>Нажмите «Рассмотреть», выберите ответ и напишите обоснование решения.</li><li>Итог пересчитается. Исходная оценка и все решения останутся в истории; рекомендации относятся к исходному анализу.</li></ol></article><article class="section-card"><span class="eyebrow">04 · НАСТРОЙКИ</span><h2>Измените чек-лист и сохраните результат</h2><ol><li>В «Чек-лист» меняйте правило, вес, ступени и доступность N/A, добавляйте критерии. Сохранение создаёт новую версию.</li><li>Запустите новую проверку: готовые оценки и уже поставленные задания сохраняют прежнюю версию.</li><li>«Обзор качества» показывает карту тем и нарушений. Нажмите ячейку, чтобы открыть диалоги и цитаты. Сравнение запусков находится ниже. Кнопка экспорта сверху сохраняет JSON с оценками, резюме, рекомендациями и решениями.</li></ol></article><article class="section-card"><h2>Как система получает результат</h2><p>API организаторов → исходный транскрипт → очередь → модель с текущим чек-листом → проверка значений и цитат → расчёт баллов кодом → сохранение в SQLite → интерфейс и апелляции.</p><p>Мы используем готовую модель. Собственные части проекта — интерфейс, очередь, редактор правил, проверка ответа, расчёт, хранение и процесс пересмотра.</p></article><article class="section-card"><h2>Что честно сказать жюри</h2><p>Начальная проверка: 6 диалогов, 48 ответов, 45 совпадений с предварительной разметкой ассистента. Это не точность на эталоне жюри. A/B ещё не завершён.</p><p>Цитаты проверяются по существованию и точности текста, но их смысловую достаточность проверяет человек. Тарифы без базы знаний и интонацию без аудио система не должна выдумывать. Очередь повышает надёжность, а не гарантирует ускорение модели.</p></article></div>`;
 }
 function renderChecklist() {
   if (!draft) return;
@@ -590,22 +597,56 @@ async function saveChecklist() {
   }
   toast("Новая версия сохранена. Примените её новой проверкой диалога.");
 }
-function renderAnalytics() {
-  const totals = state.records.filter((r) => r.score != null),
-    evaluated = state.records.filter((r) => r.evaluated);
-  $("#view-analytics").innerHTML = `<div class="analytics-grid">${[
-    "RU",
-    "KZ",
-    "EN",
-  ]
-    .map((lang) => {
-      const records = state.records.filter((r) => r.language === lang),
-        scored = records.filter((r) => r.score != null);
-      return `<article class="section-card"><span class="badge">${lang}</span><h2>${scored.length ? fmt(scored.reduce((n, r) => n + r.score, 0) / scored.length) : "—"} <small>/ 100</small></h2><p>${records.length} диалогов · ${scored.length} полных оценок</p></article>`;
-    })
-    .join(
-      "",
-    )}</div><div class="section-card"><h2>Результаты проверок</h2><p>Средние баллы учитывают только полные оценки. Это результаты системы и пересмотров, а не измерение точности относительно эталона жюри.</p><div class="table-scroll"><table class="data-table"><thead><tr><th>ДИАЛОГ</th><th>ЯЗЫК</th><th>РЕЖИМ</th><th>ИТОГ</th><th>ПРОВЕРКА</th><th></th></tr></thead><tbody>${evaluated.length ? evaluated.map((r) => `<tr><td>${esc(r.conversation_id)}</td><td>${r.language}</td><td>${r.provider === "rules" ? "Правила" : "AI-модель"}</td><td>${fmt(r.score)}</td><td>${r.gross_error ? '<span class="badge red">Грубая ошибка</span>' : r.needs_review ? "На пересмотр" : "Есть итог"}</td><td><button data-action="open-result" data-id="${esc(r.conversation_id)}">Открыть ↗</button></td></tr>`).join("") : '<tr><td colspan="6">Результатов пока нет. Начните с проверки одного диалога.</td></tr>'}</tbody></table></div></div>`;
+let analyticsData = null, analyticsRequest = 0;
+const analyticsFilters = {dataset_group: "", language: "", channel: ""};
+let analyticsSelection = {topic: "", criterion: null, outcome: "", friction: false};
+const outcomeLabels = {resolved: "Вопрос решён по тексту", follow_up: "Обещано продолжение", unresolved: "Остались вопросы", not_enough_data: "Недостаточно данных", not_analyzed: "Без AI-резюме"};
+async function renderAnalytics() {
+  const request = ++analyticsRequest;
+  if (!analyticsData) $("#view-analytics").innerHTML = '<div class="section-card"><p>Загружаем карту проблем…</p></div>';
+  try {
+    const data = await api("analytics?" + new URLSearchParams(analyticsFilters));
+    if (request !== analyticsRequest || view !== "analytics") return;
+    analyticsData = data;
+    renderAnalyticsData();
+  } catch (error) {
+    if (request !== analyticsRequest || view !== "analytics") return;
+    $("#view-analytics").innerHTML = `<div class="section-card"><h2>Аналитика недоступна</h2><p>${esc(error.message)}</p><button class="button secondary" data-action="analytics-refresh">Повторить</button></div>`;
+  }
+}
+function analyticsEvidence(cid, items) {
+  return (items || []).map(ev => `<button class="evidence-link" data-action="open-evidence" data-id="${esc(cid)}" data-index="${ev.message_index}" data-end="${ev.end_message_index || ev.message_index}">#${ev.message_index} · «${esc(ev.quote)}» ↗</button>`).join("");
+}
+function renderAnalyticsData() {
+  const d = analyticsData, c = d.coverage, sel = analyticsSelection;
+  const chosenTopic = d.topics.find(t => t.id === sel.topic);
+  const chosenCriterion = d.criteria.find(t => t.id === sel.criterion);
+  const rows = d.rows.filter(r => (!sel.topic || r.topics.some(t => t.id === sel.topic)) && (sel.criterion == null || r.failed.some(f => f.id === sel.criterion)) && (!sel.outcome || r.outcome === sel.outcome) && (!sel.friction || r.friction.length));
+  const label = [chosenTopic?.label, chosenCriterion && "Нарушение К" + chosenCriterion.id, sel.outcome && outcomeLabels[sel.outcome], sel.friction && "Признаки затруднений"].filter(Boolean).join(" · ") || "Все диалоги выборки";
+  const comparison = d.comparison;
+  const groupName = id => {const g = comparison.groups.find(g => g.id === id); return g ? `${g.model} · ${g.prompt_version} · ${g.variant} · ${g.reasoning_effort || "default"}` : "—";};
+  $("#view-analytics").innerHTML = `
+    <div class="section-card analytics-intro"><div class="editor-header"><div><h2>От оценки к причине</h2><p>Карта по исходным AI-оценкам актуального чек-листа. Нажмите на тему или ячейку, чтобы проверить конкретные диалоги.</p></div><button class="button secondary" data-action="analytics-refresh">${icon("refresh")}Обновить</button></div>
+    <div class="analytics-filters">${[["dataset_group","Набор данных"],["language","Язык"],["channel","Канал"]].map(([key,name]) => `<label class="field">${name}<select data-analytics-filter="${key}" aria-label="Аналитика: ${name}"><option value="">Все</option>${d.options[key].map(v => `<option value="${esc(v)}" ${analyticsFilters[key] === v ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>`).join("")}</div></div>
+    <div class="analytics-grid analytics-coverage"><article class="section-card"><span class="eyebrow">ПОКРЫТИЕ ОЦЕНКОЙ</span><h2>${c.evaluated} <small>/ ${c.total}</small></h2><p>Полные AI-оценки текущих правил. Без оценки: ${c.total-c.evaluated}; устаревших: ${c.stale}.</p></article><article class="section-card"><span class="eyebrow">РАЗБОР ВОПРОСОВ</span><h2>${c.requests} <small>/ ${c.total}</small></h2><p>Диалоги с AI-разбором вопросов. Резюме: ${c.summaries}. Полноту разбора проверяет человек.</p></article><article class="section-card"><span class="eyebrow">СИГНАЛЫ ЗАТРУДНЕНИЙ</span><h2>${c.friction} <small>/ ${c.total}</small></h2><p>Повторы после оператора и явное непонимание. Проверяемая эвристика, без штрафа за длину.</p><button class="button text" data-action="analytics-friction">Показать диалоги ↘</button></article></div>
+    <div class="section-card"><h2>Темы × нарушения критериев</h2><p>Темы определяются по словам в репликах клиента на RU / KZ / EN; у диалога может быть несколько тем. Ячейка: нарушения / применимые оценки, N/A исключены. «—» означает отсутствие оценок. К${d.criteria.find(x=>x.is_gross)?.id ?? "8"} — отдельный флаг грубой ошибки.</p><div class="table-scroll"><table class="data-table problem-map"><thead><tr><th>ТЕМА / ДИАЛОГИ</th>${d.criteria.map(x => `<th title="${esc(x.name)}">К${x.id}<span>${esc(x.name)}</span></th>`).join("")}</tr></thead><tbody>${d.topics.map(t => `<tr><td><button class="topic-link" data-action="analytics-cell" data-topic="${t.id}">${esc(t.label)}</button><small>${t.total} диалогов · оценено ${t.evaluated}</small></td>${t.cells.map(cell => `<td><button class="map-cell ${cell.failed ? "has-failures" : ""}" data-action="analytics-cell" data-topic="${t.id}" data-criterion="${cell.criterion_id}" ${cell.failed ? "" : "disabled"} aria-label="${esc(t.label)}, критерий ${cell.criterion_id}: нарушений ${cell.failed} из ${cell.applicable}">${cell.applicable ? `${cell.failed} / ${cell.applicable}` : "—"}</button></td>`).join("")}</tr>`).join("")}</tbody></table></div></div>
+    <div class="section-card"><h2>Итог разговора по тексту</h2><p>AI-резюме отражает только транскрипт. Обещанный следующий шаг ещё не подтверждает решение в банковской системе.</p><div class="outcome-filters">${Object.entries(outcomeLabels).map(([key,name]) => `<button class="button secondary ${sel.outcome === key ? "selected-filter" : ""}" data-action="analytics-outcome" data-outcome="${key}">${name} · ${d.outcomes[key] || 0}</button>`).join("")}</div></div>
+    <div class="section-card" id="analytics-drilldown"><div class="editor-header"><div><h2>${esc(label)}</h2><p>Найдено: ${rows.length}. Цитаты открывают исходный транскрипт.</p></div><button class="button text" data-action="analytics-reset">Сбросить отбор</button></div><div class="analytics-examples">${rows.length ? rows.map(r => `<article class="analytics-example"><div class="example-head"><button data-action="open-result" data-id="${esc(r.conversation_id)}">${esc(r.conversation_id)} ↗</button><span class="badge">${esc(r.language)} · ${esc(r.channel)}</span><span class="badge ${r.evaluated ? "green" : ""}">${r.evaluated ? fmt(r.score) + " / 100" : "Без актуальной AI-оценки"}</span></div><p>${esc(r.preview)}</p><small>${r.topics.map(t => esc(t.label)).join(" · ")} · ${outcomeLabels[r.outcome]}</small>${r.outcome_conflict ? '<p class="submission-warning">Резюме и разбор отдельных вопросов расходятся — нужен пересмотр.</p>' : ""}${sel.criterion != null ? r.failed.filter(f => f.id === sel.criterion).map(f => analyticsEvidence(r.conversation_id,f.evidence)).join("") : chosenTopic ? analyticsEvidence(r.conversation_id,r.topics.find(t => t.id === sel.topic)?.evidence.slice(0,1)) : ""}${r.friction.map(f => `<details><summary>${esc(f.label)} · проверить</summary>${analyticsEvidence(r.conversation_id,f.evidence)}</details>`).join("")}</article>`).join("") : '<p>Диалогов с таким сочетанием фильтров нет.</p>'}</div></div>
+    <div class="section-card"><h2>Сравнение запусков модели</h2><p>Группы учитывают модель, версию промпта, вариант, режим рассуждения и чек-лист. Успех означает прохождение проверки критериев по структуре и цитатам, а не подтверждённую правильность. Дополнительные блоки могут отсутствовать. Это наблюдение, а не завершённый A/B-тест. Журнал всех попыток ведётся с версии 0.5; для старых запусков известны только сохранённые ответы.</p><div class="table-scroll"><table class="data-table comparison-table"><thead><tr><th>КОНФИГУРАЦИЯ</th><th>СОХРАНЕНО / ДИАЛОГОВ</th><th>НОВЫЙ ЖУРНАЛ</th><th>СРЕДНЕЕ ВРЕМЯ</th><th>ТОКЕНЫ ВХОД / ВЫХОД</th><th>ИЗВЕСТНЫЙ РАСХОД</th></tr></thead><tbody>${comparison.groups.map(g => `<tr><td><strong>${esc(g.model)}</strong><br>${esc(g.provider)} · ${esc(g.prompt_version)} · ${esc(g.variant)}<br><small>${esc(g.reasoning_effort || "default")} · правила ${esc((g.checklist_hash || "?").slice(0,8))}</small></td><td>${g.saved_evaluations} / ${g.unique_conversations}<br><small>Старых ответов: ${g.legacy_saved}</small></td><td>Успех: ${g.completed}; ошибки: ${g.failed}<br><small>Прервано: ${g.interrupted}; в работе: ${g.running}; всего: ${g.traced_attempts}</small></td><td>${fmt(g.mean_seconds)} с<br><small>Измерено: ${g.latency_known}/${g.traced_attempts}</small></td><td>${g.usage_known ? fmt(g.input_tokens) + " / " + fmt(g.output_tokens) : "—"}<br><small>Расход известен: ${g.usage_known}/${g.traced_attempts}</small></td><td>${g.known_cost_usd == null ? "—" : "$" + g.known_cost_usd}<br><small>Цена и токены известны: ${g.cost_known}/${g.traced_attempts}</small></td></tr>`).join("") || '<tr><td colspan="6">Нет запусков модели.</td></tr>'}</tbody></table></div>
+    <h3>Одни диалоги, разные конфигурации</h3><p>Сравниваем последние сохранённые ответы каждой конфигурации на общих ID при одинаковом чек-листе. Расхождение не определяет, какая модель права.</p>${comparison.paired.map(pair => `<details class="paired-comparison"><summary>${esc(groupName(pair.left))} ↔ ${esc(groupName(pair.right))}</summary><p>Общих диалогов: ${pair.conversations}; расхождений по критериям: ${pair.different} / ${pair.criteria}.</p>${pair.examples.map(ex => `<button class="button secondary small" data-action="compare-example" data-id="${esc(ex.conversation_id)}" data-left="${ex.left_evaluation_id}" data-right="${ex.right_evaluation_id}">${esc(ex.conversation_id)} · К${ex.criteria.join(", К")}</button>`).join("")}</details>`).join("") || '<p>Пока нет общих диалогов у разных конфигураций.</p>'}</div>
+    <div class="section-card"><h2>Границы выводов</h2><p>Это анализ предоставленного набора, в котором чаты синтетические. Частоты описывают эту выборку. В данных нет CRM-результатов, CSAT и идентификатора клиента: FCR, отток, денежный эффект и склейка сессий здесь не измеряются. Апелляции доступны в карточке диалога; эта карта использует исходную AI-оценку.</p></div>`;
+}
+async function compareExample(button) {
+  const d = await api("conversations/" + encodeURIComponent(button.dataset.id));
+  const history = [d.evaluation,...d.history].filter(Boolean);
+  const left = history.find(e => e.id === Number(button.dataset.left));
+  const right = history.find(e => e.id === Number(button.dataset.right));
+  if (!left || !right) throw new Error("Сохранённые оценки не найдены");
+  const blocks = left.original_answers.filter(a => a.value !== right.original_answers.find(b => b.criterion_id === a.criterion_id)?.value).map(a => {
+    const b = right.original_answers.find(b => b.criterion_id === a.criterion_id);
+    return `<article class="recommendation"><h3>К${a.criterion_id}</h3>${[[left,a],[right,b]].map(([e,x]) => `<p><strong>${esc(e.meta.model)} · ${esc(e.meta.prompt_version || "legacy")} · ${esc(e.meta.reasoning_effort || "default")}: ${esc(String(x.value))}</strong></p><p>${esc(x.reason)}</p>${analyticsEvidence(d.record.conversation_id,x.evidence)}`).join("")}</article>`;
+  }).join("");
+  modal("Расхождения: " + d.record.conversation_id, `<p>Это сравнение исходных ответов, без решений по апелляциям.</p>${blocks}`);
 }
 function modal(title, body, footer = "") {
   const dialog = $("#modal");
@@ -630,7 +671,7 @@ async function settingsModal() {
       )
       .join(
         "",
-      )}</select></label><label class="field">Режим Gemini<select id="reasoning-effort"><option value="low" ${settings.reasoning_effort !== "default" ? "selected" : ""}>Быстрый — low</option><option value="default" ${settings.reasoning_effort === "default" ? "selected" : ""}>Стандартный режим модели</option></select><small>Влияет на рассуждение Gemini. Скорость и качество нужно проверять на данных.</small></label><label class="field">Базовый URL<input id="base-url" type="url" required value="${esc(settings.base_url)}"></label><label class="field">Название модели<input id="model-name" placeholder="Точное имя модели у провайдера" value="${esc(settings.model)}"></label><label class="field">API-ключ<input id="api-key" type="password" autocomplete="off" placeholder="${settings.key_configured ? "Ключ уже задан; оставьте пустым для сохранения" : "Ключ доступа к модели"}"><small>Для локальной Ollama ключ обычно не нужен.</small></label><div class="form-row"><label class="field">Вход, $ за 1 млн токенов<input id="input-price" type="number" min="0" step="0.001" value="${settings.input_price ?? ""}" placeholder="Неизвестно"></label><label class="field">Выход, $ за 1 млн токенов<input id="output-price" type="number" min="0" step="0.001" value="${settings.output_price ?? ""}" placeholder="Неизвестно"></label></div><div class="form-help">Облачная модель получает текст выбранного диалога и чек-лист при запуске проверки. Без настроенной модели доступны черновые правила и ручной пересмотр.</div></form>`,
+      )}</select></label><label class="field">Режим Gemini<select id="reasoning-effort"><option value="low" ${!["default","medium","high"].includes(settings.reasoning_effort) ? "selected" : ""}>Быстрый — low</option><option value="medium" ${settings.reasoning_effort === "medium" ? "selected" : ""}>Подробный — medium</option><option value="high" ${settings.reasoning_effort === "high" ? "selected" : ""}>Подробный — high</option><option value="default" ${settings.reasoning_effort === "default" ? "selected" : ""}>Стандартный режим модели</option></select><small>Влияет на рассуждение Gemini. Скорость и качество нужно проверять на данных.</small></label><label class="field">Базовый URL<input id="base-url" type="url" required value="${esc(settings.base_url)}"></label><label class="field">Название модели<input id="model-name" placeholder="Точное имя модели у провайдера" value="${esc(settings.model)}"></label><label class="field">API-ключ<input id="api-key" type="password" autocomplete="off" placeholder="${settings.key_configured ? "Ключ уже задан; оставьте пустым для сохранения" : "Ключ доступа к модели"}"><small>Для локальной Ollama ключ обычно не нужен.</small></label><div class="form-row"><label class="field">Вход, $ за 1 млн токенов<input id="input-price" type="number" min="0" step="0.001" value="${settings.input_price ?? ""}" placeholder="Неизвестно"></label><label class="field">Выход, $ за 1 млн токенов<input id="output-price" type="number" min="0" step="0.001" value="${settings.output_price ?? ""}" placeholder="Неизвестно"></label></div><div class="form-help">Облачная модель получает текст выбранного диалога и чек-лист при запуске проверки. Без настроенной модели доступны черновые правила и ручной пересмотр.</div></form>`,
     `<button class="button secondary" data-action="close-modal">Отмена</button><button class="button primary" data-action="save-settings">Сохранить настройки</button>`,
   );
 }
@@ -843,6 +884,37 @@ document.addEventListener("click", async (event) => {
         switchView("dialogs");
         await selectConversation(button.dataset.id);
         break;
+      case "open-evidence":
+        $("#modal").close();
+        switchView("dialogs");
+        await selectConversation(button.dataset.id);
+        jumpEvidence(Number(button.dataset.index),Number(button.dataset.end));
+        break;
+      case "analytics-refresh":
+        await renderAnalytics();
+        break;
+      case "analytics-cell":
+        analyticsSelection = {topic: button.dataset.topic, criterion: button.dataset.criterion ? Number(button.dataset.criterion) : null, outcome: "", friction: false};
+        renderAnalyticsData();
+        $("#analytics-drilldown").scrollIntoView({behavior:"smooth",block:"start"});
+        break;
+      case "analytics-outcome":
+        analyticsSelection.outcome = analyticsSelection.outcome === button.dataset.outcome ? "" : button.dataset.outcome;
+        renderAnalyticsData();
+        $("#analytics-drilldown").scrollIntoView({behavior:"smooth",block:"start"});
+        break;
+      case "analytics-friction":
+        analyticsSelection = {topic:"",criterion:null,outcome:"",friction:true};
+        renderAnalyticsData();
+        $("#analytics-drilldown").scrollIntoView({behavior:"smooth",block:"start"});
+        break;
+      case "analytics-reset":
+        analyticsSelection = {topic:"",criterion:null,outcome:"",friction:false};
+        renderAnalyticsData();
+        break;
+      case "compare-example":
+        await compareExample(button);
+        break;
       case "evaluate":
         await evaluateSelected();
         break;
@@ -960,6 +1032,11 @@ document.addEventListener("click", async (event) => {
   }
 });
 document.addEventListener("change", (event) => {
+  if (event.target.dataset.analyticsFilter) {
+    analyticsFilters[event.target.dataset.analyticsFilter] = event.target.value;
+    analyticsSelection = {topic:"",criterion:null,outcome:"",friction:false};
+    renderAnalytics();
+  }
   if (event.target.id === "submission-set") updateSubmissionGroups();
   if (["submission-group", "submission-team"].includes(event.target.id))
     clearSubmissionReport();

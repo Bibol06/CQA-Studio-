@@ -1805,6 +1805,40 @@ dialog::backdrop {
   overflow-wrap: anywhere;
   font-family: monospace;
 }
+.analytics-intro { margin-bottom: 18px; }
+.analytics-filters { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; }
+.analytics-filters .field { margin-bottom: 0; }
+.analytics-coverage h2 { font-size: 34px; margin: 14px 0; }
+.analytics-coverage h2 small { font-size: 20px; color: var(--muted); }
+.problem-map { min-width: 950px; }
+.problem-map th { min-width: 85px; text-align: center; }
+.problem-map th:first-child { min-width: 200px; text-align: left; }
+.problem-map th span { display: block; font-size: 9px; font-weight: 400; max-width: 110px; white-space: normal; line-height: 1.5; }
+.problem-map td:not(:first-child) { text-align: center; }
+.problem-map td small { display: block; margin-top: 6px; color: var(--muted); }
+.map-cell { border: 1px solid #dce9e0; background: #f0f6f1; color: #5d7565; padding: 10px 8px; border-radius: 7px; min-width: 64px; font-variant-numeric: tabular-nums; }
+.map-cell:disabled { opacity: .75; cursor: default; }
+.map-cell.has-failures { background: #fff1df; color: #815421; border-color: #ead2b1; font-weight: 700; }
+.map-cell.has-failures:hover { background: #ffe4c0; }
+.topic-link { text-align: left; font-weight: 600; }
+.outcome-filters { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.selected-filter { box-shadow: inset 0 0 0 2px #16825c; }
+.analytics-examples { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; max-height: 560px; overflow: auto; margin-top: 15px; }
+.analytics-example { padding: 18px; border: 1px solid #e1e9e4; border-radius: 10px; min-width: 0; }
+.analytics-example p { overflow-wrap: anywhere; }
+.analytics-example small { display: block; line-height: 1.6; color: var(--muted); }
+.example-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.example-head button { font-weight: 700; }
+.analytics-example details { margin-top: 12px; font-size: 12px; }
+.analytics-example .evidence-link { max-width: 100%; overflow-wrap: anywhere; margin-top: 10px; }
+.comparison-table { min-width: 1050px; }
+.comparison-table td { min-width: 145px; white-space: normal; line-height: 1.7; }
+.comparison-table small { color: var(--muted); }
+.paired-comparison { border-top: 1px solid #e1e9e4; padding: 15px 0; }
+.paired-comparison .button { margin: 4px; }
+@media (max-width: 900px) {
+  .analytics-filters, .analytics-examples { grid-template-columns: 1fr; }
+}
 @media (max-width: 900px) {
   .submission-fields {
     grid-template-columns: 1fr;

@@ -80,8 +80,9 @@ def validate_result(config,record,result,require_evidence=True):
     if not isinstance(raw,list) or len(raw)!=len(config['criteria']): raise ValueError('Модель вернула не все критерии')
     expected={c['id']:c for c in config['criteria']}; seen=set(); answers=[]
     for item in raw:
+        if not isinstance(item,dict): raise ValueError('Неверная структура критерия')
         cid=item.get('criterion_id')
-        if isinstance(cid,bool) or cid not in expected or cid in seen: raise ValueError('Неверные или повторные ID критериев')
+        if type(cid) is not int or cid not in expected or cid in seen: raise ValueError('Неверные или повторные ID критериев')
         seen.add(cid); c=expected[cid]; value=item.get('value')
         if isinstance(value,bool) or value not in c['allowed_values']: raise ValueError(f'Недопустимая ступень критерия {cid}')
         reason=item.get('reason')
@@ -90,6 +91,7 @@ def validate_result(config,record,result,require_evidence=True):
         if not isinstance(evidence,list) or (require_evidence and not evidence): raise ValueError(f'Нет доказательства критерия {cid}')
         clean=[]
         for ev in evidence:
+            if not isinstance(ev,dict): raise ValueError('Неверная структура доказательства')
             index=ev.get('message_index'); end=ev.get('end_message_index',index); quote=ev.get('quote')
             if isinstance(index,bool) or not isinstance(index,int) or not 1<=index<=len(record['transcript']): raise ValueError('Ссылка на несуществующую реплику')
             if isinstance(end,bool) or not isinstance(end,int) or not index<=end<=len(record['transcript']): raise ValueError('Неверный участок доказательства')

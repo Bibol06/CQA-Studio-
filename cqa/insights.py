@@ -4,6 +4,8 @@ def evidence(items, record):
         raise ValueError('Для вывода нужны от 1 до 10 фрагментов-доказательств')
     clean = []
     for item in items:
+        if not isinstance(item, dict):
+            raise ValueError('Неверная структура доказательства')
         index = item.get('message_index')
         end = item.get('end_message_index', index)
         if type(index) is not int or not 1 <= index <= len(record['transcript']):
@@ -49,6 +51,8 @@ def validate_insights(raw, record, config, answers):
         raise ValueError('Неверный список рекомендаций')
     seen = set()
     for item in recommendations:
+        if not isinstance(item, dict):
+            raise ValueError('Неверная структура рекомендации')
         cid = item.get('criterion_id')
         if type(cid) is not int or cid not in expected or cid in seen:
             raise ValueError('Рекомендация должна относиться к отдельному нарушенному критерию')
@@ -59,3 +63,40 @@ def validate_insights(raw, record, config, answers):
     if seen != expected:
         raise ValueError('Не для всех нарушенных критериев предложены рекомендации')
     return result
+
+
+def validate_requests(raw, record):
+    """Validate question-level analysis independently of scores and summary."""
+    if not isinstance(raw, list) or not 1 <= len(raw) <= 20:
+        raise ValueError('Нужны от 1 до 20 существенных вопросов клиента')
+    clean = []
+    for item in raw:
+        if not isinstance(item, dict) or item.get('status') not in ['answered', 'follow_up', 'unanswered', 'not_enough_data']:
+            raise ValueError('Неверный статус вопроса клиента')
+        request = evidence(item.get('request_evidence'), record)
+        if any(record['transcript'][ev['message_index']-1]['speaker'] != 'client' for ev in request):
+            raise ValueError('Вопрос должен ссылаться на реплику клиента')
+        response = item.get('answer_evidence')
+        if not isinstance(response, list):
+            raise ValueError('Неверный список ответов оператора')
+        response = evidence(response, record) if response else []
+        if any(record['transcript'][ev['message_index']-1]['speaker'] != 'operator' for ev in response):
+            raise ValueError('Ответ должен ссылаться на реплику оператора')
+        if item['status'] in ['answered', 'follow_up'] and not response:
+            raise ValueError('Для ответа или обещания продолжения нужна реплика оператора')
+        if any(ev['message_index'] < min(r['message_index'] for r in request) for ev in response):
+            raise ValueError('Ответ не может предшествовать вопросу')
+        clean.append({'request': text(item.get('request'), 'request'), 'status': item['status'],
+                      'request_evidence': request, 'answer_evidence': response})
+    return clean
+
+
+def request_outcome(requests):
+    statuses = {r['status'] for r in requests}
+    if 'unanswered' in statuses:
+        return 'unresolved'
+    if 'not_enough_data' in statuses:
+        return 'not_enough_data'
+    if 'follow_up' in statuses:
+        return 'follow_up'
+    return 'resolved'

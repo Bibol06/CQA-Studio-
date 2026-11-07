@@ -22,6 +22,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1),payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,error TEXT,evaluation_id INTEGER,attempts INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS model_attempts(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,job_id INTEGER,status TEXT NOT NULL,payload TEXT NOT NULL,error TEXT,evaluation_id INTEGER,created_at TEXT NOT NULL,finished_at TEXT);
             ''')
             if 'dataset' not in [r['name'] for r in db.execute('PRAGMA table_info(conversations)')]:
                 db.execute("ALTER TABLE conversations ADD COLUMN dataset TEXT NOT NULL DEFAULT 'DEV'")
@@ -73,6 +74,9 @@ class Store:
             if job_id is not None:
                 updated=db.execute("UPDATE jobs SET status='completed',evaluation_id=?,error=NULL,updated_at=? WHERE id=? AND status='running'",(eid,now(),job_id))
                 if updated.rowcount!=1: raise ValueError('Состояние задания изменилось; оценка не сохранена')
+            if meta.get('attempt_id') is not None:
+                db.execute("UPDATE model_attempts SET status='completed',payload=?,evaluation_id=?,finished_at=? WHERE id=? AND status='running'",
+                           (dumps(meta),eid,now(),meta['attempt_id']))
         return self.evaluation(eid)
     def evaluation(self,eid):
         with self.db() as db:
@@ -146,6 +150,30 @@ class Store:
     def recover_jobs(self):
         with self.db() as db:
             db.execute("UPDATE jobs SET status='interrupted',error=?,updated_at=? WHERE status='running'",('Сервер остановился во время запроса. Проверьте результат и повторите вручную; запрос мог быть обработан провайдером.',now()))
+            db.execute("UPDATE model_attempts SET status='interrupted',error=?,finished_at=? WHERE status='running'",
+                       ('Сервер остановился. Отправка, расход токенов и результат запроса могут быть неизвестны.',now()))
+
+    def start_attempt(self,cid,meta,job_id=None):
+        with self.db() as db:
+            cur=db.execute("INSERT INTO model_attempts(conversation_id,job_id,status,payload,created_at) VALUES(?,?,'running',?,?)",
+                           (cid,job_id,dumps(meta),now()))
+            return cur.lastrowid
+
+    def fail_attempt(self,aid,error,meta):
+        with self.db() as db:
+            db.execute("UPDATE model_attempts SET status='failed',payload=?,error=?,finished_at=? WHERE id=? AND status='running'",
+                       (dumps(meta),error,now(),aid))
+
+    def analytics_snapshot(self):
+        # One read transaction keeps coverage and drill-down tied to the same results.
+        with self.db() as db:
+            db.execute('BEGIN')
+            records=[{**json.loads(r['payload']),'dataset_group':r['dataset']} for r in db.execute('SELECT * FROM conversations ORDER BY id')]
+            evaluations=[{**json.loads(r['payload']),'id':r['id'],'conversation_id':r['conversation_id'],'created_at':r['created_at']} for r in db.execute('SELECT * FROM evaluations ORDER BY id')]
+            attempts=[{**dict(r),'meta':json.loads(r['payload'])} for r in db.execute('SELECT * FROM model_attempts ORDER BY id')]
+            config=json.loads(db.execute('SELECT payload FROM checklists ORDER BY version DESC LIMIT 1').fetchone()[0])
+        for attempt in attempts:attempt.pop('payload')
+        return records,evaluations,attempts,config
 
     def enqueue(self,cids,variant='B'):
         if not isinstance(cids,list) or not 1<=len(cids)<=200 or any(not isinstance(cid,str) for cid in cids):
@@ -192,10 +220,15 @@ class Store:
         if not row:raise ValueError('Задание не найдено')
         return dict(row)
 
-    def finish_job_error(self,jid,error,pause=False):
+    def finish_job_error(self,jid,error,pause=False,meta=None):
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             db.execute("UPDATE jobs SET status='failed',error=?,updated_at=? WHERE id=? AND status IN ('queued','running','waiting_key','failed')",(error,now(),jid))
+            rows=list(db.execute("SELECT id,payload FROM model_attempts WHERE job_id=? AND status='running'",(jid,)))
+            for row in rows:
+                details=meta or json.loads(row['payload'])
+                db.execute("UPDATE model_attempts SET status='failed',payload=?,error=?,finished_at=? WHERE id=?",
+                           (dumps(details),error,now(),row['id']))
             if pause:
                 db.execute("UPDATE jobs SET status='paused',error=?,updated_at=? WHERE status='queued'",('Провайдер отклонил запрос по ключу, доступу или квоте. Исправьте причину и возобновите очередь вручную.',now()))
 
