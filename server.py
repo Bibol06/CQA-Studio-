@@ -11,6 +11,7 @@ from cqa.domain import score
 from cqa.engine import rules_review
 from cqa.providers import call_model,safe_endpoint
 from cqa.store import Store
+from cqa.queue import Worker
 
 ROOT=Path(__file__).resolve().parent
 STATIC=ROOT/'static'
@@ -20,10 +21,14 @@ def make_server(port=8765,db_path=None):
     if not store.overview()['records']:
         seed=ROOT/'research/dev.json'
         if seed.exists(): store.import_records(json.loads(seed.read_text(encoding='utf-8')))
-    key=os.environ.get('CQA_API_KEY',os.environ.get('OPENAI_API_KEY',''))
+    initial=store.settings();keys={}
+    if os.environ.get('CQA_API_KEY'):keys[(initial['provider'],initial['base_url'])]=os.environ['CQA_API_KEY']
+    if os.environ.get('OPENAI_API_KEY'):keys[('openai','https://api.openai.com/v1')]=os.environ['OPENAI_API_KEY']
+    def key_for(settings):return keys.get((settings['provider'],settings['base_url']),'')
     busy=set()
     import threading
     lock=threading.Lock()
+    evaluate_lock=threading.Lock()
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,fmt,*args): pass
         def write_json(self,obj,status=200):
@@ -44,11 +49,12 @@ def make_server(port=8765,db_path=None):
             if not self.trusted(): return self.write_json({'error':'Неверный источник запроса'},403)
             path=unquote(urlparse(self.path).path)
             try:
-                if path=='/api/state': return self.write_json(store.overview())
+                if path=='/api/state': return self.write_json({**store.overview(),'queue_counts':store.jobs()['counts']})
+                if path=='/api/jobs': return self.write_json(store.jobs())
                 if path.startswith('/api/conversations/'): return self.write_json(store.detail(path.split('/')[-1]))
-                if path=='/api/settings': return self.write_json({**store.settings(),'key_configured':bool(key)})
+                if path=='/api/settings': return self.write_json({**store.settings(),'key_configured':bool(key_for(store.settings()))})
                 if path=='/api/export': return self.write_json(store.export())
-                if path=='/api/health': return self.write_json({'ok':True,'version':'0.2.0','benchmark_variants':['A','B']})
+                if path=='/api/health': return self.write_json({'ok':True,'version':'0.3.0','benchmark_variants':['A','B'],'background_queue':True,'insights':True})
                 if path.startswith('/api/'): return self.write_json({'error':'Не найдено'},404)
                 target=STATIC/('index.html' if path=='/' else path.lstrip('/'))
                 if not target.resolve().is_relative_to(STATIC.resolve()) or not target.is_file(): return self.write_json({'error':'Не найдено'},404)
@@ -59,11 +65,19 @@ def make_server(port=8765,db_path=None):
                 self.send_header('X-Content-Type-Options','nosniff'); self.end_headers(); self.wfile.write(raw)
             except (ValueError,KeyError,json.JSONDecodeError) as e: self.write_json({'error':str(e)},400)
         def do_POST(self):
-            nonlocal key
             if not self.trusted(): return self.write_json({'error':'Неверный источник запроса'},403)
             path=unquote(urlparse(self.path).path)
             try:
                 body=self.body()
+                if path=='/api/jobs':
+                    result=store.enqueue(body.get('conversation_ids'),body.get('variant','B'));worker.wake.set();return self.write_json(result,202)
+                if path=='/api/jobs/resume':store.resume_jobs();worker.wake.set();return self.write_json(store.jobs())
+                if path.startswith('/api/jobs/'):
+                    parts=path.split('/');jid=int(parts[-2]);action=parts[-1]
+                    if action=='retry':store.retry_job(jid)
+                    elif action=='cancel':store.cancel_job(jid)
+                    else:raise ValueError('Неизвестное действие очереди')
+                    worker.wake.set();return self.write_json(store.jobs())
                 if path=='/api/checklist': return self.write_json(store.save_config(body))
                 if path=='/api/import': return self.write_json({'imported':store.import_records(body)})
                 if path=='/api/sync':
@@ -83,15 +97,18 @@ def make_server(port=8765,db_path=None):
                     provider=body.get('provider')
                     if provider not in ['rules','openai','gemini','compatible','ollama']: raise ValueError('Неизвестный провайдер')
                     settings={k:body.get(k) for k in ['provider','base_url','model','input_price','output_price']}
+                    settings['reasoning_effort']=body.get('reasoning_effort','low')
+                    if settings['reasoning_effort'] not in ['low','medium','high','default']:raise ValueError('Неверный режим рассуждения')
                     if provider!='rules': safe_endpoint(settings['base_url'],provider)
                     if not isinstance(settings.get('model'),str) or len(settings['model'])>150: raise ValueError('Неверное название модели')
                     for k in ['input_price','output_price']:
                         if settings[k] is not None and (isinstance(settings[k],bool) or not isinstance(settings[k],(int,float)) or not 0<=settings[k]<=10000): raise ValueError('Неверная стоимость токенов')
                     if 'api_key' in body:
                         if not isinstance(body['api_key'],str): raise ValueError('Неверный ключ')
-                        key=body['api_key'].strip()
+                        keys[(provider,settings['base_url'])]=body['api_key'].strip()
                     store.save_settings(settings)
-                    return self.write_json({**settings,'key_configured':bool(key)})
+                    worker.wake.set()
+                    return self.write_json({**settings,'key_configured':bool(key_for(settings))})
                 if path.startswith('/api/evaluate/'):
                     cid=path.split('/')[-1]
                     with lock:
@@ -99,10 +116,13 @@ def make_server(port=8765,db_path=None):
                         busy.add(cid)
                     try:
                         record=store.record(cid); config=store.config(); settings=store.settings()
-                        if settings['provider']=='rules':
-                            answers=rules_review(record,config); meta={'provider':'rules','model':'Проверка правил','calls':0,'elapsed_seconds':0,'usage':{},'cost_usd':None}
-                        else: answers,meta=call_model(record,config,settings,key,body.get('variant','B'))
-                        return self.write_json(store.save_evaluation(cid,config,answers,meta))
+                        if not evaluate_lock.acquire(blocking=False):raise ValueError('Модель занята фоновой задачей. Используйте очередь или дождитесь завершения.')
+                        try:
+                            if settings['provider']=='rules':
+                                answers=rules_review(record,config); meta={'provider':'rules','model':'Проверка правил','calls':0,'elapsed_seconds':0,'usage':{},'cost_usd':None};insights=None
+                            else: answers,meta,insights=call_model(record,config,settings,key_for(settings),body.get('variant','B'))
+                            return self.write_json(store.save_evaluation(cid,config,answers,meta,insights))
+                        finally:evaluate_lock.release()
                     finally:
                         with lock: busy.discard(cid)
                 if path=='/api/appeals': return self.write_json({'id':store.appeal(int(body['evaluation_id']),int(body['criterion_id']),body['comment'])})
@@ -113,8 +133,13 @@ def make_server(port=8765,db_path=None):
             except (urllib.error.URLError,TimeoutError): self.write_json({'error':'Сервис данных недоступен. Локальные данные сохранены.'},502)
             except Exception:
                 self.write_json({'error':'Не удалось выполнить операцию. Предыдущий результат сохранён.'},500)
-    server=ThreadingHTTPServer(('127.0.0.1',port),Handler)
+    class Server(ThreadingHTTPServer):
+        def server_close(self):
+            if hasattr(self,'worker'):self.worker.close()
+            super().server_close()
+    server=Server(('127.0.0.1',port),Handler)
     server.daemon_threads=True
+    worker=Worker(store,key_for,evaluate_lock);server.worker=worker;server.store=store
     return server
 
 if __name__=='__main__':

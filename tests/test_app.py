@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.request
 import urllib.error
@@ -28,6 +29,9 @@ def answers():
     return [{'criterion_id':c['id'],'value':20 if c['id']==4 else 10 if c['id']==6 else 'Нет' if c['is_gross'] else 'Да',
              'reason':'Тестовый ответ','evidence':[{'message_index':3,'quote':'Здравствуйте'}],'needs_review':False}
             for c in default_checklist()['criteria']]
+
+def insights():
+    return {'summary':{'request':'Клиент спросил, где тариф.','actions':'Оператор объяснил, где посмотреть.','outcome':'Клиент сообщил об успехе.','status':'resolved','evidence':[{'message_index':4,'quote':'Нашёл, спасибо.'}]},'recommendations':[]}
 
 class DomainTests(unittest.TestCase):
     def setUp(self): self.c=default_checklist()
@@ -146,16 +150,42 @@ class HttpTests(unittest.TestCase):
         req=urllib.request.Request(self.base+'/api/evaluate/p1-ru-022',data=b'{}',headers={'Content-Type':'application/json'})
         with urllib.request.urlopen(req) as r:e=json.load(r)
         self.assertEqual(e['meta']['calls'],0);self.assertIsNone(e['final_score']['total']);self.assertTrue(e['final_score']['gross_error'])
+    def test_background_http_returns_before_model_and_deduplicates(self):
+        self.server.store.import_records([record()])
+        release=threading.Event();started=threading.Event()
+        def slow_model(*args):
+            started.set();release.wait(3)
+            return answers(),{'provider':'test','model':'fixture'},insights()
+        def post(path,body):
+            req=urllib.request.Request(self.base+path,data=json.dumps(body).encode(),headers={'Content-Type':'application/json'})
+            with urllib.request.urlopen(req,timeout=2) as response:return response.status,json.load(response)
+        settings={'provider':'gemini','model':'test-model','base_url':'https://generativelanguage.googleapis.com/v1beta/openai','api_key':'unit-test-key'}
+        with patch('cqa.queue.call_model',side_effect=slow_model):
+            try:
+                post('/api/settings',settings)
+                status,first=post('/api/jobs',{'conversation_ids':[record()['conversation_id']]})
+                self.assertEqual(status,202);self.assertTrue(started.wait(1))
+                _,second=post('/api/jobs',{'conversation_ids':[record()['conversation_id']]})
+                self.assertEqual(second['existing'],first['created'])
+                with urllib.request.urlopen(self.base+'/api/jobs') as r:
+                    jobs=json.load(r);self.assertEqual(jobs['counts']['running'],1)
+                    self.assertNotIn('unit-test-key',json.dumps(jobs))
+                release.set();deadline=time.monotonic()+2
+                while time.monotonic()<deadline and not self.server.store.jobs()['counts'].get('completed'):time.sleep(.02)
+                self.assertEqual(self.server.store.jobs()['counts']['completed'],1)
+                self.assertTrue(self.server.store.detail(record()['conversation_id'])['evaluation']['insights'])
+            finally:
+                release.set();post('/api/settings',{'provider':'rules','model':'','base_url':''})
 
 class AdapterTests(unittest.TestCase):
     def test_openai_request_and_validation_without_network(self):
-        r=record();data={'status':'completed','output':[{'content':[{'type':'output_text','text':json.dumps({'conversation_id':r['conversation_id'],'criteria':answers()})}]}],'usage':{'input_tokens':100,'output_tokens':20}}
+        r=record();data={'status':'completed','output':[{'content':[{'type':'output_text','text':json.dumps({'conversation_id':r['conversation_id'],'criteria':answers(),'insights':insights()})}]}],'usage':{'input_tokens':100,'output_tokens':20}}
         class Response:
             def __enter__(self):return self
             def __exit__(self,*args):pass
             def read(self,*args):return json.dumps(data).encode()
         with patch('urllib.request.urlopen',return_value=Response()) as mock:
-            result,meta=call_model(r,default_checklist(),{'provider':'openai','model':'test-model','base_url':'https://api.openai.com/v1','input_price':1,'output_price':2},'test-not-a-real-key')
+            result,meta,summary=call_model(r,default_checklist(),{'provider':'openai','model':'test-model','base_url':'https://api.openai.com/v1','input_price':1,'output_price':2},'test-not-a-real-key')
             sent=json.loads(mock.call_args.args[0].data)
             self.assertFalse(sent['store']);self.assertEqual(len(result),8);self.assertEqual(meta['usage']['input_tokens'],100)
 

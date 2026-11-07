@@ -20,6 +20,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS evaluations(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,checklist_version INTEGER NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS appeals(id INTEGER PRIMARY KEY AUTOINCREMENT,evaluation_id INTEGER NOT NULL,criterion_id INTEGER NOT NULL,comment TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',value TEXT,reason TEXT,created_at TEXT NOT NULL,resolved_at TEXT);
             CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1),payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,error TEXT,evaluation_id INTEGER,attempts INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
             ''')
             if 'dataset' not in [r['name'] for r in db.execute('PRAGMA table_info(conversations)')]:
                 db.execute("ALTER TABLE conversations ADD COLUMN dataset TEXT NOT NULL DEFAULT 'DEV'")
@@ -61,13 +62,16 @@ class Store:
         with self.db() as db: row=db.execute('SELECT payload FROM conversations WHERE id=?',(cid,)).fetchone()
         if not row: raise ValueError('Диалог не найден')
         return json.loads(row[0])
-    def save_evaluation(self,cid,config,answers,meta):
+    def save_evaluation(self,cid,config,answers,meta,insights=None,job_id=None):
         result=score(config,answers)
         payload={'checklist':config,'answers':answers,'original_score':result,'meta':meta,
-                 'checklist_hash':config_hash(config)}
+                 'checklist_hash':config_hash(config),'insights':insights}
         with self.db() as db:
             cursor=db.execute('INSERT INTO evaluations(conversation_id,checklist_version,payload,created_at) VALUES(?,?,?,?)',(cid,config['version'],dumps(payload),now()))
             eid=cursor.lastrowid
+            if job_id is not None:
+                updated=db.execute("UPDATE jobs SET status='completed',evaluation_id=?,error=NULL,updated_at=? WHERE id=? AND status='running'",(eid,now(),job_id))
+                if updated.rowcount!=1: raise ValueError('Состояние задания изменилось; оценка не сохранена')
         return self.evaluation(eid)
     def evaluation(self,eid):
         with self.db() as db:
@@ -130,3 +134,68 @@ class Store:
     def export(self):
         with self.db() as db: ids=[r[0] for r in db.execute('SELECT id FROM evaluations ORDER BY id')]
         return {'exported_at':now(),'checklist':self.config(),'evaluations':[self.evaluation(i) for i in ids]}
+
+    def recover_jobs(self):
+        with self.db() as db:
+            db.execute("UPDATE jobs SET status='interrupted',error=?,updated_at=? WHERE status='running'",('Сервер остановился во время запроса. Проверьте результат и повторите вручную; запрос мог быть обработан провайдером.',now()))
+
+    def enqueue(self,cids,variant='B'):
+        if not isinstance(cids,list) or not 1<=len(cids)<=200 or any(not isinstance(cid,str) for cid in cids):
+            raise ValueError('Выберите от 1 до 200 диалогов')
+        if variant not in ['A','B']: raise ValueError('Неизвестный вариант оценки')
+        config=self.config();settings=self.settings();created=[];existing=[]
+        for cid in cids:self.record(cid)
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            for cid in dict.fromkeys(cids):
+                active=db.execute("SELECT id FROM jobs WHERE conversation_id=? AND status IN ('queued','running','waiting_key','paused')",(cid,)).fetchone()
+                if active: existing.append(active[0]);continue
+                payload={'checklist':config,'settings':settings,'variant':variant}
+                cur=db.execute("INSERT INTO jobs(conversation_id,payload,status,created_at,updated_at) VALUES(?,?,'queued',?,?)",(cid,dumps(payload),now(),now()))
+                created.append(cur.lastrowid)
+        return {'created':created,'existing':existing}
+
+    def jobs(self):
+        with self.db() as db:
+            rows=[dict(r) for r in db.execute('SELECT * FROM jobs ORDER BY id DESC LIMIT 300')]
+            counts={r['status']:r['n'] for r in db.execute('SELECT status,COUNT(*) n FROM jobs GROUP BY status')}
+        for r in rows:
+            payload=json.loads(r.pop('payload'));r['checklist_version']=payload['checklist']['version']
+            r['provider']=payload['settings']['provider'];r['model']=payload['settings'].get('model','')
+        return {'jobs':rows,'counts':counts}
+
+    def candidates(self):
+        with self.db() as db:
+            rows=[dict(r) for r in db.execute("SELECT * FROM jobs WHERE status IN ('queued','waiting_key') ORDER BY id")]
+        for r in rows:r['payload']=json.loads(r['payload'])
+        return rows
+
+    def job_state(self,jid,status,error=None):
+        with self.db() as db:
+            if status=='running':
+                row=db.execute("UPDATE jobs SET status='running',error=NULL,attempts=attempts+1,updated_at=? WHERE id=? AND status IN ('queued','waiting_key')",(now(),jid))
+            else:
+                row=db.execute("UPDATE jobs SET status=?,error=?,updated_at=? WHERE id=? AND status IN ('queued','running','waiting_key')",(status,error,now(),jid))
+            return bool(row.rowcount)
+
+    def retry_job(self,jid):
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            job=db.execute('SELECT * FROM jobs WHERE id=?',(jid,)).fetchone()
+            if not job or job['status'] not in ['failed','interrupted']:raise ValueError('Повтор доступен для ошибочных или прерванных заданий')
+            if db.execute("SELECT 1 FROM jobs WHERE conversation_id=? AND status IN ('queued','running','waiting_key','paused')",(job['conversation_id'],)).fetchone():
+                raise ValueError('Этот диалог уже находится в очереди')
+            db.execute("UPDATE jobs SET status='queued',error=NULL,updated_at=? WHERE id=?",(now(),jid))
+
+    def cancel_job(self,jid):
+        with self.db() as db:
+            row=db.execute("UPDATE jobs SET status='cancelled',error=NULL,updated_at=? WHERE id=? AND status IN ('queued','waiting_key','paused','failed','interrupted')",(now(),jid))
+            if row.rowcount!=1:raise ValueError('Запущенный запрос нельзя отменить; дождитесь результата')
+
+    def pause_pending(self,reason):
+        with self.db() as db:
+            db.execute("UPDATE jobs SET status='paused',error=?,updated_at=? WHERE status='queued'",(reason,now()))
+
+    def resume_jobs(self):
+        with self.db() as db:
+            db.execute("UPDATE jobs SET status='queued',error=NULL,updated_at=? WHERE status='paused'",(now(),))

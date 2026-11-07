@@ -46,6 +46,21 @@ let state = { records: [], checklist: null, open_appeals: 0 },
   busy = false,
   draft = null,
   toastTimer;
+let jobsState = { jobs: [], counts: {} },
+  jobsHash = "",
+  pollBusy = false,
+  needsDetailRefresh = false,
+  pendingBatch = [];
+const jobLabels = {
+  queued: "Ожидает",
+  running: "Обрабатывается",
+  waiting_key: "Нужен ключ",
+  completed: "Готово",
+  failed: "Ошибка",
+  interrupted: "Прервано",
+  cancelled: "Отменено",
+  paused: "Приостановлено",
+};
 const fmt = (value) =>
   value == null
     ? "—"
@@ -138,6 +153,15 @@ function renderStats() {
   $("#nav-count").textContent = state.records.length;
 }
 function renderBanner() {
+  if (
+    settings.provider !== "rules" &&
+    settings.provider !== "ollama" &&
+    !settings.key_configured
+  ) {
+    $("#model-banner").innerHTML =
+      `${icon("info")}<span><strong>Ключ модели не задан.</strong> Задания сохранятся в очереди и дождутся подключения.</span><button data-action="settings">Добавить ключ</button>`;
+    return;
+  }
   $("#model-banner").innerHTML =
     settings.provider === "rules"
       ? `${icon("info")}<span><strong>Режим проверки правил.</strong> Смысловые критерии требуют модели или пересмотра человеком. Неполные оценки не входят в средний балл.</span><button data-action="settings">Подключить AI ${icon("arrow")}</button>`
@@ -173,16 +197,26 @@ function renderList() {
         .join("")
     : '<div class="empty-state"><p>Нет диалогов по выбранным фильтрам.</p></div>';
 }
+let selectionSerial = 0;
 async function selectConversation(id) {
+  const serial = ++selectionSerial;
   selected = id;
+  detail = null;
   renderList();
+  $("#transcript-panel").innerHTML =
+    '<div class="empty-state">Загрузка диалога…</div>';
+  $("#results-panel").innerHTML =
+    '<div class="empty-state">Загрузка результата…</div>';
   $("#transcript-panel").classList.add("loading");
   try {
-    detail = await api("conversations/" + encodeURIComponent(id));
+    const incoming = await api("conversations/" + encodeURIComponent(id));
+    if (serial !== selectionSerial) return;
+    detail = incoming;
     renderDetail();
     history.replaceState(null, "", "#" + encodeURIComponent(id));
   } finally {
-    $("#transcript-panel").classList.remove("loading");
+    if (serial === selectionSerial)
+      $("#transcript-panel").classList.remove("loading");
   }
 }
 function safeUrl(value) {
@@ -197,6 +231,7 @@ function renderDetail() {
   if (!detail) return;
   renderTranscript();
   renderResults();
+  renderQueueBanner();
 }
 let showContext = true;
 function renderTranscript() {
@@ -216,6 +251,7 @@ function renderTranscript() {
       )}<div class="transcript-end">Конец предоставленного транскрипта</div></div>`;
 }
 function renderResults() {
+  if (!detail) return;
   const r = detail.record,
     e = detail.evaluation;
   if (!e) {
@@ -231,7 +267,7 @@ function renderResults() {
         e.answers.find((a) => a.criterion_id === c.id)?.value == null,
     );
   $("#results-panel").innerHTML =
-    `<div class="results-header"><h2>Оценка диалога</h2><span class="badge ${s.complete ? "green" : "amber"}">${s.complete ? "С итогом" : "На пересмотр"}</span></div>${e.checklist.version !== detail.current_version ? '<div class="stale-note">Чек-лист изменён. Оценка сохранена по версии ' + e.checklist.version + ". Запустите новую проверку.</div>" : ""}<div class="result-scroll"><div class="score-block"><div class="score-line"><div><div class="score-number">${fmt(s.total)} <small>/ 100</small></div><div class="score-caption">${s.complete ? "Итог с учётом решений проверяющего" : `Осталось оценить ${unknown} из ${e.answers.length} критериев`}</div></div><div class="score-annotation"><strong>${e.meta.provider === "rules" ? "Черновая проверка" : esc(e.meta.model)}</strong>${s.gross_error ? '<span class="badge red">Грубая ошибка</span>' : grossUnknown ? "Грубые ошибки: не проверены" : "Грубые ошибки: нет"}</div></div><progress max="100" value="${s.total ?? 0}" aria-label="Итоговый балл"></progress><div class="score-footnote"><span>Чек-лист v${e.checklist.version}</span><span>${s.complete ? `Применимый вес: ${fmt(s.applicable_weight)}` : "Неполная оценка не суммируется"}</span></div>${e.original_score.total !== s.total ? `<div class="review-note">Исходная оценка: ${fmt(e.original_score.total)} → после пересмотра: ${fmt(s.total)}</div>` : ""}</div>${renderSectionScores(s)}<div class="criteria-heading"><strong>Критерии оценки</strong><span>${e.answers.length} критериев</span></div>${e.checklist.criteria
+    `<div class="results-header"><h2>Оценка диалога</h2><span class="badge ${s.complete ? "green" : "amber"}">${s.complete ? "С итогом" : "На пересмотр"}</span></div>${e.checklist.version !== detail.current_version ? '<div class="stale-note">Чек-лист изменён. Оценка сохранена по версии ' + e.checklist.version + ". Запустите новую проверку.</div>" : ""}<div class="result-scroll"><div class="score-block"><div class="score-line"><div><div class="score-number">${fmt(s.total)} <small>/ 100</small></div><div class="score-caption">${s.complete ? "Итог с учётом решений проверяющего" : `Осталось оценить ${unknown} из ${e.answers.length} критериев`}</div></div><div class="score-annotation"><strong>${e.meta.provider === "rules" ? "Черновая проверка" : esc(e.meta.model)}</strong>${s.gross_error ? '<span class="badge red">Грубая ошибка</span>' : grossUnknown ? "Грубые ошибки: не проверены" : "Грубые ошибки: нет"}</div></div><progress max="100" value="${s.total ?? 0}" aria-label="Итоговый балл"></progress><div class="score-footnote"><span>Чек-лист v${e.checklist.version}</span><span>${s.complete ? `Применимый вес: ${fmt(s.applicable_weight)}` : "Неполная оценка не суммируется"}</span></div>${e.original_score.total !== s.total ? `<div class="review-note">Исходная оценка: ${fmt(e.original_score.total)} → после пересмотра: ${fmt(s.total)}</div>` : ""}</div>${renderSectionScores(s)}${renderInsights(e)}<div class="criteria-heading"><strong>Критерии оценки</strong><span>${e.answers.length} критериев</span></div>${e.checklist.criteria
       .map((c) =>
         criterionCard(
           c,
@@ -285,58 +321,63 @@ function jumpEvidence(index, end) {
   const message = $("#message-" + index);
   const pane = $("#messages");
   if (message && pane) {
-    const offset = message.getBoundingClientRect().top - pane.getBoundingClientRect().top;
-    pane.scrollTo({ top: pane.scrollTop + offset - pane.clientHeight / 3, behavior: "smooth" });
+    const offset =
+      message.getBoundingClientRect().top - pane.getBoundingClientRect().top;
+    pane.scrollTo({
+      top: pane.scrollTop + offset - pane.clientHeight / 3,
+      behavior: "smooth",
+    });
   }
 }
 async function evaluateSelected() {
-  if (!selected || busy) return;
+  if (
+    !selected ||
+    !detail ||
+    detail.record.conversation_id !== selected ||
+    busy
+  )
+    return;
   busy = true;
-  renderResults();
   try {
-    await api("evaluate/" + encodeURIComponent(selected), {});
-    await refresh();
-    await selectConversation(selected);
+    const result = await api("jobs", { conversation_ids: [selected] });
+    await pollJobs();
     toast(
-      settings.provider === "rules"
-        ? "Черновик правил готов. Смысловые критерии ожидают оценки."
-        : "Оценка сохранена. Все ссылки на цитаты проверены.",
+      result.created.length
+        ? "Диалог добавлен в очередь. Можно продолжать работу."
+        : "Этот диалог уже ожидает обработки.",
     );
   } finally {
     busy = false;
-    renderResults();
+    if (detail) {
+      renderResults();
+      renderQueueBanner();
+    }
   }
 }
 async function batch() {
   if (busy) return;
   const records = filtered();
   if (!records.length) return toast("Нет диалогов для проверки");
-  busy = true;
-  let done = 0,
-    errors = 0;
-  const label = $("#batch-label");
-  try {
-    for (const r of records) {
-      label.textContent = `${done + errors + 1} / ${records.length}`;
-      try {
-        await api("evaluate/" + encodeURIComponent(r.conversation_id), {});
-        done++;
-      } catch (e) {
-        errors++;
-        if (settings.provider !== "rules") {
-          fail(e);
-          break;
-        }
-      }
-    }
-    await refresh();
-    if (selected) await selectConversation(selected);
-    toast(`Сохранено проверок: ${done}${errors ? ". Ошибок: " + errors : ""}`);
-  } finally {
-    busy = false;
-    label.textContent = "Проверить выборку";
-    renderResults();
-  }
+  pendingBatch = records.map((r) => r.conversation_id);
+  modal(
+    "Поставить выборку в очередь",
+    `<p>По текущим фильтрам найдено ${records.length} диалогов. Каждый выбранный диалог вызовет модель один раз. Версия чек-листа и настройки модели фиксируются при добавлении.</p><label class="field">Сколько диалогов обработать<input id="batch-limit" type="number" min="1" max="${records.length}" value="${Math.min(3, records.length)}"></label><div class="form-help">Можно обновлять страницу: обработка выполняется на сервере. При ошибке запрос не повторяется автоматически.</div>`,
+    `<button class="button secondary" data-action="close-modal">Отмена</button><button class="button primary" data-action="submit-batch">Добавить задания</button>`,
+  );
+}
+async function submitBatch() {
+  const limit = Number($("#batch-limit").value);
+  if (!Number.isInteger(limit) || limit < 1 || limit > pendingBatch.length)
+    throw new Error("Укажите допустимое количество диалогов");
+  const result = await api("jobs", {
+    conversation_ids: pendingBatch.slice(0, limit),
+  });
+  $("#modal").close();
+  await pollJobs();
+  switchView("queue");
+  toast(
+    `Добавлено: ${result.created.length}. Уже в очереди: ${result.existing.length}.`,
+  );
 }
 function switchView(next) {
   view = next;
@@ -362,6 +403,16 @@ function switchView(next) {
       "Видеть общую картину",
       "Результаты проверок, открытые апелляции и прозрачная история решений.",
     ],
+    queue: [
+      "Очередь",
+      "Обработка продолжается в фоне",
+      "Задания сохраняются на сервере. Обновление страницы не прерывает проверку.",
+    ],
+    help: [
+      "Как пользоваться",
+      "От первого запуска до защиты",
+      "Пошаговая инструкция, устройство системы и честные формулировки для презентации.",
+    ],
   };
   $("#breadcrumb").textContent = titles[next][0];
   $("#page-title").innerHTML = esc(titles[next][1]) + "<span>.</span>";
@@ -372,6 +423,99 @@ function switchView(next) {
     renderChecklist();
   }
   if (next === "analytics") renderAnalytics();
+  if (next === "queue") renderQueue();
+  if (next === "help") renderHelp();
+}
+function activeJob() {
+  return jobsState.jobs.find(
+    (j) =>
+      j.conversation_id === selected &&
+      ["queued", "running", "waiting_key", "paused"].includes(j.status),
+  );
+}
+function renderQueueBanner() {
+  const c = jobsState.counts,
+    active = (c.queued || 0) + (c.running || 0) + (c.waiting_key || 0);
+  $("#queue-count").textContent = active;
+  $("#queue-banner").classList.toggle("hidden", !active);
+  $("#queue-banner").innerHTML =
+    `${icon(c.running ? "refresh" : "clock", c.running ? "spinner" : "")}<span>В работе: <strong>${c.running || 0}</strong> · ожидают: <strong>${c.queued || 0}</strong> · нужен ключ: <strong>${c.waiting_key || 0}</strong></span><button class="button text" data-view="queue">Открыть очередь →</button>`;
+  if (detail) {
+    const job = activeJob();
+    document.querySelectorAll('[data-action="evaluate"]').forEach((b) => {
+      b.disabled = !!job || busy;
+      if (job) b.innerHTML = icon("clock") + esc(jobLabels[job.status]);
+    });
+  }
+}
+function renderQueue() {
+  const c = jobsState.counts;
+  $("#view-queue").innerHTML =
+    `<div class="section-card"><div class="editor-header"><div><h2>Задания обработки</h2><p>Счётчики за всё время. Показаны последние 300 заданий. Выполняется один запрос модели одновременно.</p></div><button class="button secondary" data-action="refresh-jobs">${icon("refresh")}Обновить</button></div><div class="queue-counters">${["queued", "running", "waiting_key", "completed", "failed", "interrupted", "paused"].map((s) => `<span class="badge ${["failed", "interrupted"].includes(s) ? "red" : s === "completed" ? "green" : ""}">${jobLabels[s]}: ${c[s] || 0}</span>`).join("")}</div><div class="table-scroll"><table class="data-table"><thead><tr><th>ЗАДАНИЕ / ДИАЛОГ</th><th>СТАТУС</th><th>МОДЕЛЬ / ЧЕК-ЛИСТ</th><th>ПОДРОБНОСТИ</th><th>ДЕЙСТВИЯ</th></tr></thead><tbody>${jobsState.jobs.length ? jobsState.jobs.map((j) => `<tr><td>#${j.id}<br><button data-action="open-result" data-id="${esc(j.conversation_id)}">${esc(j.conversation_id)}</button></td><td><span class="badge ${j.status === "completed" ? "green" : ["failed", "interrupted"].includes(j.status) ? "red" : "amber"}">${esc(jobLabels[j.status] || j.status)}</span></td><td>${esc(j.model || "Правила")}<br><small>Чек-лист v${j.checklist_version} · попыток ${j.attempts}</small></td><td class="job-error">${esc(j.error || (j.evaluation_id ? "Результат #" + j.evaluation_id : "Создано " + new Date(j.created_at).toLocaleString("ru-RU")))}</td><td>${["failed", "interrupted"].includes(j.status) ? `<button class="button secondary small" data-action="retry-job" data-id="${j.id}">Повторить</button>` : ""}${["queued", "waiting_key", "paused", "failed", "interrupted"].includes(j.status) ? `<button class="button text" data-action="cancel-job" data-id="${j.id}">Отменить</button>` : ""}${j.status === "waiting_key" ? '<button class="button text" data-action="settings">Добавить ключ</button>' : ""}${j.status === "running" ? "Запрос уже отправлен" : ""}${j.status === "paused" ? '<button class="button text" data-action="resume-jobs">Возобновить очередь</button>' : ""}</td></tr>`).join("") : '<tr><td colspan="5">Очередь пуста. Выберите диалог и нажмите «Проверить диалог».</td></tr>'}</tbody></table></div></div>`;
+}
+async function pollJobs() {
+  if (pollBusy) return;
+  pollBusy = true;
+  try {
+    const next = await api("jobs"),
+      hash = JSON.stringify(next);
+    if (hash !== jobsHash) {
+      const previous = new Map(jobsState.jobs.map((j) => [j.id, j.status]));
+      jobsState = next;
+      jobsHash = hash;
+      if (
+        next.jobs.some(
+          (j) =>
+            j.conversation_id === selected &&
+            j.status === "completed" &&
+            previous.get(j.id) !== "completed",
+        )
+      )
+        needsDetailRefresh = true;
+      await refresh();
+      if (view === "queue") renderQueue();
+      renderQueueBanner();
+    }
+    if (needsDetailRefresh && !$("#modal").open && selected) {
+      const id = selected,
+        serial = selectionSerial;
+      const incoming = await api("conversations/" + encodeURIComponent(id));
+      if (id !== selected || serial !== selectionSerial || $("#modal").open)
+        return;
+      detail = incoming;
+      needsDetailRefresh = false;
+      renderDetail();
+      renderQueueBanner();
+    }
+  } catch {
+    /* A temporary disconnect must not discard server-owned jobs or modal input. */
+  } finally {
+    pollBusy = false;
+  }
+}
+function evidenceButtons(items) {
+  return (items || [])
+    .map(
+      (ev) =>
+        `<button class="evidence-link" data-action="evidence" data-index="${ev.message_index}" data-end="${ev.end_message_index || ev.message_index}" aria-label="Перейти к сообщению ${ev.message_index}">${icon("link")}<span class="evidence-quote">#${ev.message_index} · «${esc(ev.quote)}»</span></button>`,
+    )
+    .join("");
+}
+function renderInsights(e) {
+  if (!e.insights)
+    return `<div class="insight-empty">${icon("info")}<span>Для этой проверки резюме ещё не сформировано. Новая AI-проверка добавит резюме и рекомендации; прежняя оценка останется в истории.</span></div>`;
+  const s = e.insights.summary,
+    labels = {
+      resolved: "Вопрос решён",
+      follow_up: "Ожидается продолжение",
+      unresolved: "Вопрос не решён",
+      not_enough_data: "Недостаточно данных",
+    };
+  return `<section class="insights"><p class="review-note">AI-резюме и советы: проверьте выводы по исходным репликам.</p><details open><summary>Суть разговора <span class="badge ${s.status === "resolved" ? "green" : "amber"}">${labels[s.status]}</span></summary><dl><dt>Запрос клиента</dt><dd>${esc(s.request)}</dd><dt>Действия оператора</dt><dd>${esc(s.actions)}</dd><dt>Результат</dt><dd>${esc(s.outcome)}</dd></dl><details class="insight-sources"><summary>Основания резюме</summary>${evidenceButtons(s.evidence)}</details></details><details class="recommendations" ${e.insights.recommendations.length ? "open" : ""}><summary>Рекомендации · ${e.insights.recommendations.length}</summary>${e.appeals.some((a) => a.status === "resolved") ? '<p class="review-note">Советы сформированы по исходной AI-оценке. Сопоставьте их с последующими решениями проверяющего.</p>' : ""}${e.insights.recommendations.length ? e.insights.recommendations.map((r) => `<article class="recommendation"><span class="badge">Критерий ${r.criterion_id}</span><p><strong>Проблема:</strong> ${esc(r.issue)}</p><p><strong>Что улучшить:</strong> ${esc(r.action)}</p>${evidenceButtons(r.evidence)}</article>`).join("") : '<p class="review-note">По исходной оценке нарушений не обнаружено. Это не заменяет независимую проверку.</p>'}</details></section>`;
+}
+function renderHelp() {
+  $("#view-help").innerHTML =
+    `<div class="help-grid"><article class="section-card"><span class="eyebrow">01 · НАЧАЛО РАБОТЫ</span><h2>Подключите данные и модель</h2><ol><li>В «Настройки модели» выберите Gemini, укажите ключ и сохраните. После перезапуска сервера ключ вводится заново.</li><li>«Загрузить данные» принимает JSON или получает группу DEV / контроль через API организаторов.</li><li>В списке найдите диалог по ID или тексту запроса. Фильтры ограничивают будущую выборку.</li></ol></article><article class="section-card"><span class="eyebrow">02 · ПРОВЕРКА</span><h2>Запустите и проверьте результат</h2><ol><li>«Проверить диалог» создаёт фоновое задание. «Проверить выборку» позволяет выбрать количество отфильтрованных диалогов.</li><li>В «Очередь» видны прогресс и ошибки. Можно обновлять страницу. Сервер должен продолжать работать.</li><li>В карточке появятся балл, резюме, рекомендации и оценки критериев. Нажатие на цитату выделяет исходные реплики.</li></ol></article><article class="section-card"><span class="eyebrow">03 · ПЕРЕСМОТР</span><h2>Оспорьте оценку</h2><ol><li>Нажмите «Оспорить оценку» рядом с критерием и опишите причину.</li><li>Нажмите «Рассмотреть», выберите ответ и напишите обоснование решения.</li><li>Итог пересчитается. Исходная оценка и все решения останутся в истории; рекомендации относятся к исходному анализу.</li></ol></article><article class="section-card"><span class="eyebrow">04 · НАСТРОЙКИ</span><h2>Измените чек-лист и сохраните результат</h2><ol><li>В «Чек-лист» меняйте правило, вес, ступени и доступность N/A, добавляйте критерии. Сохранение создаёт новую версию.</li><li>Запустите новую проверку: готовые оценки и уже поставленные задания сохраняют прежнюю версию.</li><li>«Обзор качества» показывает фактические баллы. Кнопка экспорта сверху сохраняет JSON с оценками, резюме, рекомендациями и решениями.</li></ol></article><article class="section-card"><h2>Как система получает результат</h2><p>API организаторов → исходный транскрипт → очередь → модель с текущим чек-листом → проверка значений и цитат → расчёт баллов кодом → сохранение в SQLite → интерфейс и апелляции.</p><p>Мы используем готовую модель. Собственные части проекта — интерфейс, очередь, редактор правил, проверка ответа, расчёт, хранение и процесс пересмотра.</p></article><article class="section-card"><h2>Что честно сказать жюри</h2><p>Начальная проверка: 6 диалогов, 48 ответов, 45 совпадений с предварительной разметкой ассистента. Это не точность на эталоне жюри. A/B ещё не завершён.</p><p>Цитаты проверяются по существованию и точности текста, но их смысловую достаточность проверяет человек. Тарифы без базы знаний и интонацию без аудио система не должна выдумывать. Очередь повышает надёжность, а не гарантирует ускорение модели.</p></article></div>`;
 }
 function renderChecklist() {
   if (!draft) return;
@@ -451,7 +595,7 @@ async function settingsModal() {
       )
       .join(
         "",
-      )}</select></label><label class="field">Базовый URL<input id="base-url" type="url" required value="${esc(settings.base_url)}"></label><label class="field">Название модели<input id="model-name" placeholder="Точное имя модели у провайдера" value="${esc(settings.model)}"></label><label class="field">API-ключ<input id="api-key" type="password" autocomplete="off" placeholder="${settings.key_configured ? "Ключ уже задан; оставьте пустым для сохранения" : "Ключ доступа к модели"}"><small>Для локальной Ollama ключ обычно не нужен.</small></label><div class="form-row"><label class="field">Вход, $ за 1 млн токенов<input id="input-price" type="number" min="0" step="0.001" value="${settings.input_price ?? ""}" placeholder="Неизвестно"></label><label class="field">Выход, $ за 1 млн токенов<input id="output-price" type="number" min="0" step="0.001" value="${settings.output_price ?? ""}" placeholder="Неизвестно"></label></div><div class="form-help">Облачная модель получает текст выбранного диалога и чек-лист при запуске проверки. Без настроенной модели доступны черновые правила и ручной пересмотр.</div></form>`,
+      )}</select></label><label class="field">Режим Gemini<select id="reasoning-effort"><option value="low" ${settings.reasoning_effort !== "default" ? "selected" : ""}>Быстрый — low</option><option value="default" ${settings.reasoning_effort === "default" ? "selected" : ""}>Стандартный режим модели</option></select><small>Влияет на рассуждение Gemini. Скорость и качество нужно проверять на данных.</small></label><label class="field">Базовый URL<input id="base-url" type="url" required value="${esc(settings.base_url)}"></label><label class="field">Название модели<input id="model-name" placeholder="Точное имя модели у провайдера" value="${esc(settings.model)}"></label><label class="field">API-ключ<input id="api-key" type="password" autocomplete="off" placeholder="${settings.key_configured ? "Ключ уже задан; оставьте пустым для сохранения" : "Ключ доступа к модели"}"><small>Для локальной Ollama ключ обычно не нужен.</small></label><div class="form-row"><label class="field">Вход, $ за 1 млн токенов<input id="input-price" type="number" min="0" step="0.001" value="${settings.input_price ?? ""}" placeholder="Неизвестно"></label><label class="field">Выход, $ за 1 млн токенов<input id="output-price" type="number" min="0" step="0.001" value="${settings.output_price ?? ""}" placeholder="Неизвестно"></label></div><div class="form-help">Облачная модель получает текст выбранного диалога и чек-лист при запуске проверки. Без настроенной модели доступны черновые правила и ручной пересмотр.</div></form>`,
     `<button class="button secondary" data-action="close-modal">Отмена</button><button class="button primary" data-action="save-settings">Сохранить настройки</button>`,
   );
 }
@@ -460,6 +604,7 @@ async function saveSettings() {
     provider: $("#provider").value,
     base_url: $("#base-url").value.trim(),
     model: $("#model-name").value.trim(),
+    reasoning_effort: $("#reasoning-effort").value,
     input_price:
       $("#input-price").value === "" ? null : Number($("#input-price").value),
     output_price:
@@ -596,6 +741,25 @@ document.addEventListener("click", async (event) => {
       case "batch":
         await batch();
         break;
+      case "submit-batch":
+        await submitBatch();
+        break;
+      case "refresh-jobs":
+        await pollJobs();
+        renderQueue();
+        break;
+      case "retry-job":
+        await api(`jobs/${button.dataset.id}/retry`, {});
+        await pollJobs();
+        break;
+      case "cancel-job":
+        await api(`jobs/${button.dataset.id}/cancel`, {});
+        await pollJobs();
+        break;
+      case "resume-jobs":
+        await api("jobs/resume", {});
+        await pollJobs();
+        break;
       case "evidence":
         jumpEvidence(Number(button.dataset.index), Number(button.dataset.end));
         break;
@@ -710,6 +874,8 @@ async function init() {
       ? hash
       : state.records[0]?.conversation_id;
     if (id) await selectConversation(id);
+    await pollJobs();
+    setInterval(pollJobs, 2000);
   } catch (error) {
     fail(error);
     $("#transcript-panel").innerHTML =

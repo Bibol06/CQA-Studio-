@@ -32,6 +32,16 @@
         <button class="nav-item" data-view="analytics">
           <span data-icon="chart"></span>Обзор качества
         </button>
+        <button class="nav-item" data-view="queue">
+          <span data-icon="clock"></span>Очередь<span
+            id="queue-count"
+            class="nav-count"
+            >0</span
+          >
+        </button>
+        <button class="nav-item" data-view="help">
+          <span data-icon="info"></span>Как пользоваться
+        </button>
       </nav>
       <div class="rail-note">
         <span data-icon="shield"></span
@@ -85,6 +95,12 @@
       </section>
       <section class="stats" id="stats" aria-label="Сводка"></section>
       <div id="model-banner" class="model-banner"></div>
+      <div
+        id="queue-banner"
+        class="queue-banner hidden"
+        role="status"
+        aria-live="polite"
+      ></div>
       <section id="view-dialogs" class="view active">
         <div class="review-workspace">
           <aside class="conversation-panel">
@@ -145,6 +161,8 @@
       </section>
       <section id="view-checklist" class="view"></section>
       <section id="view-analytics" class="view"></section>
+      <section id="view-queue" class="view"></section>
+      <section id="view-help" class="view"></section>
       <footer class="page-footer">
         <span>CQA Studio</span><span>Сначала доказательство. Затем оценка.</span
         ><span>Data Challenge ’26</span>

@@ -418,6 +418,7 @@ h1 > span {
 .review-workspace {
   display: grid;
   grid-template-columns: 248px minmax(260px, 1fr) 354px;
+  grid-template-rows: minmax(0, 1fr);
   background: white;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -770,6 +771,7 @@ h1 > span {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 .results-header {
   padding: 17px 17px 13px;
@@ -789,6 +791,11 @@ h1 > span {
 .result-scroll {
   overflow: auto;
   flex: 1;
+  min-height: 0;
+}
+.results-header,
+.results-bottom {
+  flex-shrink: 0;
 }
 .score-block {
   padding: 17px;
@@ -1480,6 +1487,7 @@ dialog::backdrop {
   }
   .review-workspace {
     grid-template-columns: 180px 1fr;
+    grid-template-rows: auto auto;
     height: auto;
     min-height: 0;
   }
@@ -1626,4 +1634,159 @@ dialog::backdrop {
 }
 .appeal-button {
   font-size: 9px;
+}
+.queue-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: -5px 0 15px;
+  background: #edf5ef;
+  border: 1px solid #d8e9dd;
+  border-radius: 8px;
+  color: #617e69;
+  font-size: 11px;
+}
+.queue-banner > button {
+  margin-left: auto;
+}
+.queue-banner svg {
+  width: 16px;
+  height: 16px;
+}
+.queue-counters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 15px 0;
+}
+.queue-counters .badge {
+  font-size: 10px;
+  padding: 6px 10px;
+}
+.job-error {
+  max-width: 340px;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.data-table small {
+  font-size: 10px;
+  color: #94a18b;
+}
+.help-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.help-grid .section-card {
+  margin: 0;
+}
+.help-grid ol {
+  padding-left: 20px;
+  color: #75866c;
+  font-size: 12px;
+  line-height: 1.85;
+}
+.help-grid li + li {
+  margin-top: 10px;
+}
+.insights {
+  padding: 15px 17px;
+  border-bottom: 1px solid var(--line);
+  background: #f9fbf5;
+}
+.insights summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #46693e;
+  line-height: 1.8;
+}
+.insights summary > .badge {
+  font-weight: 400;
+  margin-left: 5px;
+  font-size: 9px;
+}
+.insights dl {
+  margin: 14px 0 10px;
+}
+.insights dt {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #92a184;
+  margin-top: 10px;
+}
+.insights dd {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.8;
+  color: #5b7450;
+}
+.insight-sources summary {
+  font-size: 10px;
+  color: #91a083;
+  font-weight: 400;
+}
+.recommendations {
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 1px solid #e2eadc;
+}
+.recommendation {
+  margin-top: 12px;
+  background: #fff;
+  border: 1px solid #e3eadc;
+  border-radius: 7px;
+  padding: 10px;
+}
+.recommendation p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #75866a;
+  margin: 8px 0;
+}
+.recommendation strong {
+  font-weight: 600;
+  color: #57744a;
+}
+.insight-empty {
+  padding: 12px 17px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.7;
+  color: #95a389;
+}
+.insight-empty svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.review-workspace {
+  overflow: clip;
+}
+@media (max-width: 800px) {
+  .help-grid {
+    grid-template-columns: 1fr;
+  }
+  .queue-banner {
+    flex-wrap: wrap;
+    font-size: 10px;
+  }
+  .job-error {
+    min-width: 190px;
+  }
+}
+@media (max-height: 900px) {
+  .rail-note {
+    display: none;
+  }
+  .settings-button {
+    margin-top: auto;
+  }
+  .rail-footer {
+    margin-top: 10px;
+  }
 }
