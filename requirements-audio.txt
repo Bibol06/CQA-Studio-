@@ -1,0 +1,4 @@
+# Optional local measurements; base website continues to work without these.
+miniaudio==1.72
+praat-parselmouth==0.4.7
+numpy==2.4.4

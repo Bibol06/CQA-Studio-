@@ -22,6 +22,10 @@ def fixture():
 
 
 class TranscriptTests(unittest.TestCase):
+    def test_mixed_ru_kz_turn_is_not_translated_or_transliterated(self):
+        r,raw=fixture();text='Сәлеметсіз бе! Мен [Имя скрыто], как могу помочь?'
+        raw['turns'][0]['text']=text
+        self.assertEqual(validate_edition(raw,r,wav_clip())['turns'][0]['text'],text)
     def test_edition_does_not_mutate_original_roles_timestamps_or_text(self):
         r,raw=fixture();before=copy.deepcopy(r);result=validate_edition(raw,r,wav_clip())
         self.assertEqual(r,before);self.assertEqual(result['source_hash'],source_hash(r))

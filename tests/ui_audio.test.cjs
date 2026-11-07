@@ -20,6 +20,12 @@ test('seeking an event uses audio seconds and a short pre-roll',()=>{
   ctx.seekAudio(32,90);
   assert.equal(vm.runInContext('audioPreviewEnd',ctx)-player.currentTime,20);
 });
+test('signal measurements expose quiet intervals without claiming intentional ignoring',()=>{
+  const {ctx}=app();
+  const html=ctx.renderMeasuredAudio({signal_analysis:{status:'measured',envelope_dbfs:[-20,-60],rms_dbfs:-30,quiet_threshold_dbfs:-45,quiet_seconds:3,quiet_segments:[{start_seconds:2,end_seconds:5}],pitch:{status:'not_assessable'}}});
+  assert.ok(html.includes('dBFS'));assert.ok(html.includes('data-start="2"'));assert.ok(html.includes('не доказательство'));
+  assert.ok(!html.includes('намеренно игнорирует'));
+});
 test('stale events cannot play a different conversation',()=>{
   const {ctx,player}=app();ctx.selected='call-two';ctx.seekAudio(32,34);
   assert.equal(player.plays,0);assert.equal(player.currentTime,0);
