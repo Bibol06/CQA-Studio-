@@ -1,0 +1,131 @@
+{
+  "generated_at_utc": "2026-11-08T05:12:51.740187+00:00",
+  "calls": [
+    {
+      "conversation_id": "p4-ru-003",
+      "audio_sha256": "a867ad414348b3c1c84a5cd0345d925512c62d9a564c19d22162f6f5606b7446",
+      "processed_seconds": 393.22,
+      "full_input": true,
+      "whisper_chunk_pairs": 16,
+      "local_engine": "Whisper tiny multilingual INT8 / sherpa-onnx 2.0.1",
+      "cloud_engine": "gemini-3.5-flash-lite",
+      "source_transcript_sent": false,
+      "cloud_variant_characters": {
+        "raw": 3475,
+        "enhanced": 3458
+      },
+      "provider_generation_completed": {
+        "raw": true,
+        "enhanced": true
+      },
+      "cloud_calls_in_successful_run": 2,
+      "elapsed_seconds": 20.17,
+      "accuracy": {
+        "status": "human_reference_required",
+        "wer": null,
+        "cer": null
+      }
+    },
+    {
+      "conversation_id": "p4-ru-002",
+      "audio_sha256": "d33850a459d553c71acabaec1e171860b7e36835349ec06d294c07250002c5eb",
+      "processed_seconds": 620.38,
+      "full_input": true,
+      "whisper_chunk_pairs": 26,
+      "local_engine": "Whisper tiny multilingual INT8 / sherpa-onnx 2.0.1",
+      "cloud_engine": "gemini-3.5-flash-lite",
+      "source_transcript_sent": false,
+      "cloud_variant_characters": {
+        "raw": 3138,
+        "enhanced": 2985
+      },
+      "provider_generation_completed": {
+        "raw": true,
+        "enhanced": true
+      },
+      "cloud_calls_in_successful_run": 2,
+      "elapsed_seconds": 25.19,
+      "accuracy": {
+        "status": "human_reference_required",
+        "wer": null,
+        "cer": null
+      }
+    },
+    {
+      "conversation_id": "p4-ru-001",
+      "audio_sha256": "7fb1091a64b9275b0f76414b0937396adadb9d22cec390dc3fe3936a92565fa4",
+      "processed_seconds": 312.26,
+      "full_input": true,
+      "whisper_chunk_pairs": 13,
+      "local_engine": "Whisper tiny multilingual INT8 / sherpa-onnx 2.0.1",
+      "cloud_engine": "gemini-3.5-flash-lite",
+      "source_transcript_sent": false,
+      "cloud_variant_characters": {
+        "raw": 3702,
+        "enhanced": 3694
+      },
+      "provider_generation_completed": {
+        "raw": true,
+        "enhanced": true
+      },
+      "cloud_calls_in_successful_run": 2,
+      "elapsed_seconds": 14.83,
+      "accuracy": {
+        "status": "human_reference_required",
+        "wer": null,
+        "cer": null
+      }
+    },
+    {
+      "conversation_id": "p4-ru-005",
+      "audio_sha256": "71ec8f09b65a19c79de0d84703910bc06fbcff826bee16c653c72c901335e16a",
+      "processed_seconds": 345.34,
+      "full_input": true,
+      "whisper_chunk_pairs": 14,
+      "local_engine": "Whisper tiny multilingual INT8 / sherpa-onnx 2.0.1",
+      "cloud_engine": "gemini-3.5-flash-lite",
+      "source_transcript_sent": false,
+      "cloud_variant_characters": {
+        "raw": 4249,
+        "enhanced": 4344
+      },
+      "provider_generation_completed": {
+        "raw": true,
+        "enhanced": true
+      },
+      "cloud_calls_in_successful_run": 2,
+      "elapsed_seconds": 20.4,
+      "accuracy": {
+        "status": "human_reference_required",
+        "wer": null,
+        "cer": null
+      }
+    },
+    {
+      "conversation_id": "p4-ru-004",
+      "audio_sha256": "aeaf1e65f6f09af4781b6f3f8a15edc2cfca4f7c267cb80618483fa689bcbff8",
+      "processed_seconds": 424.02,
+      "full_input": true,
+      "whisper_chunk_pairs": 17,
+      "local_engine": "Whisper tiny multilingual INT8 / sherpa-onnx 2.0.1",
+      "cloud_engine": "gemini-3.5-flash-lite",
+      "source_transcript_sent": false,
+      "cloud_variant_characters": {
+        "raw": 4693,
+        "enhanced": 4493
+      },
+      "provider_generation_completed": {
+        "raw": true,
+        "enhanced": true
+      },
+      "cloud_calls_in_successful_run": 2,
+      "elapsed_seconds": 23.09,
+      "accuracy": {
+        "status": "human_reference_required",
+        "wer": null,
+        "cer": null
+      }
+    }
+  ],
+  "note": "Completed generation is not proof of accuracy. Manual audio reference is required."
+}

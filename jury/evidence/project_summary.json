@@ -1,0 +1,128 @@
+{
+  "generated_at_utc": "2026-11-08T05:12:51.447012+00:00",
+  "checklist_version": 2,
+  "checklist_hash": "a01818ad99d9034c247078ef5370efe1841ba5e8ebe8ad35b5c1468ab619f95c",
+  "total": 65,
+  "evaluated": 65,
+  "missing_ids": [],
+  "coverage": {
+    "language": {
+      "EN": {
+        "total": 15,
+        "evaluated": 15
+      },
+      "KZ": {
+        "total": 15,
+        "evaluated": 15
+      },
+      "RU": {
+        "total": 35,
+        "evaluated": 35
+      }
+    },
+    "channel": {
+      "agent chat": {
+        "total": 60,
+        "evaluated": 60
+      },
+      "voice call": {
+        "total": 5,
+        "evaluated": 5
+      }
+    }
+  },
+  "criteria": [
+    {
+      "id": 1,
+      "name": "Установление контакта",
+      "applicable": 65,
+      "na": 0,
+      "failed": 3,
+      "review_flags": 0
+    },
+    {
+      "id": 2,
+      "name": "Выявление потребности",
+      "applicable": 53,
+      "na": 12,
+      "failed": 6,
+      "review_flags": 0
+    },
+    {
+      "id": 3,
+      "name": "Идентификация",
+      "applicable": 10,
+      "na": 55,
+      "failed": 2,
+      "review_flags": 0
+    },
+    {
+      "id": 4,
+      "name": "Корректная и полная консультация",
+      "applicable": 64,
+      "na": 1,
+      "failed": 11,
+      "review_flags": 0
+    },
+    {
+      "id": 5,
+      "name": "Эмпатия и клиентоориентированность",
+      "applicable": 65,
+      "na": 0,
+      "failed": 3,
+      "review_flags": 0
+    },
+    {
+      "id": 6,
+      "name": "Управление диалогом, скорость и грамотность",
+      "applicable": 65,
+      "na": 0,
+      "failed": 6,
+      "review_flags": 0
+    },
+    {
+      "id": 7,
+      "name": "Завершение",
+      "applicable": 62,
+      "na": 3,
+      "failed": 47,
+      "review_flags": 0
+    },
+    {
+      "id": 8,
+      "name": "Грубые ошибки",
+      "applicable": 65,
+      "na": 0,
+      "failed": 4,
+      "review_flags": 0
+    }
+  ],
+  "summaries": 51,
+  "request_analysis": 54,
+  "outcome_conflicts": 1,
+  "gross_error_flags": 4,
+  "attempts": {
+    "completed": 65,
+    "failed": 28
+  },
+  "attempts_total": 93,
+  "input_tokens_known": 328026,
+  "output_tokens_known": 120867,
+  "usage_known_attempts": 84,
+  "mean_seconds": 5.7,
+  "median_seconds": 3.88,
+  "latency_known_attempts": 93,
+  "cost_known_attempts": 0,
+  "participant": "Бибол Жайлыбаев",
+  "team_name": "Fantastic Four",
+  "app_version": "0.7.0",
+  "source_transcripts_unchanged": true,
+  "submission_ok": 65,
+  "submission_error": 0,
+  "submission_sha256": "4d9113e0c5173a534fecf681ca9f3ef7470d29d7b3d3b0194ead4e8056f94163",
+  "independent_human_reference_available": false,
+  "model_accuracy": null,
+  "real_call_wer": null,
+  "real_call_cer": null,
+  "prod_file_present": false
+}

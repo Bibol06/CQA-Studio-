@@ -1,0 +1,92 @@
+{
+  "description": "SYNTHETIC PUBLIC DEMO. No real customer data or AI results.",
+  "data": {
+    "dataset_group_id": "PUBLIC_DEMO_SYNTHETIC",
+    "records": [
+      {
+        "conversation_id": "demo-ru-001",
+        "channel": "agent chat",
+        "language": "RU",
+        "audio_url": null,
+        "transcript": [
+          {
+            "timestamp": "00:00",
+            "speaker": "client",
+            "text": "Это синтетическая демонстрация. Где найти раздел помощи?"
+          },
+          {
+            "timestamp": "00:05",
+            "speaker": "operator",
+            "text": "Здравствуйте! Меня зовут Дана. Раздел «Помощь» открыт в меню демонстрационного приложения."
+          },
+          {
+            "timestamp": "00:10",
+            "speaker": "client",
+            "text": "Спасибо, вижу."
+          },
+          {
+            "timestamp": "00:15",
+            "speaker": "operator",
+            "text": "Если появятся вопросы, обращайтесь. Хорошего дня!"
+          }
+        ]
+      },
+      {
+        "conversation_id": "demo-kz-001",
+        "channel": "agent chat",
+        "language": "KZ",
+        "audio_url": null,
+        "transcript": [
+          {
+            "timestamp": "00:00",
+            "speaker": "client",
+            "text": "Бұл жасанды мысал. Көмек бөлімін қайдан табамын?"
+          },
+          {
+            "timestamp": "00:05",
+            "speaker": "operator",
+            "text": "Сәлеметсіз бе! Менің атым Дана. Демонстрациялық қолданба мәзірінен «Көмек» бөлімін ашыңыз."
+          },
+          {
+            "timestamp": "00:10",
+            "speaker": "client",
+            "text": "Рақмет, нашёл."
+          },
+          {
+            "timestamp": "00:15",
+            "speaker": "operator",
+            "text": "Тағы сұрақтарыңыз болса, хабарласыңыз. Сау болыңыз!"
+          }
+        ]
+      },
+      {
+        "conversation_id": "demo-en-001",
+        "channel": "agent chat",
+        "language": "EN",
+        "audio_url": null,
+        "transcript": [
+          {
+            "timestamp": "00:00",
+            "speaker": "client",
+            "text": "This is a synthetic example. Where can I find Help?"
+          },
+          {
+            "timestamp": "00:05",
+            "speaker": "operator",
+            "text": "Hello, I am Dana. Open Help in the demo application menu."
+          },
+          {
+            "timestamp": "00:10",
+            "speaker": "client",
+            "text": "Thanks, I found it."
+          },
+          {
+            "timestamp": "00:15",
+            "speaker": "operator",
+            "text": "Please contact us if you have further questions. Goodbye!"
+          }
+        ]
+      }
+    ]
+  }
+}

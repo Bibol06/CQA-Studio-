@@ -1,0 +1,26 @@
+✔ late analytics response cannot replace newer filter results (10.5855ms)
+✔ analytics response after navigation does not overwrite hidden page (1.9232ms)
+✔ WER CER require a reference and preserve mixed RU KZ words (17.6716ms)
+✔ ASR exposes the cloud comparison immediately and escapes recognized text (8.4435ms)
+✔ ASR export keeps provenance and leaves unreferenced accuracy absent (26.244ms)
+✔ a decoded preview cannot start after selecting another conversation (4.9209ms)
+✔ seeking an event uses audio seconds and a short pre-roll (9.172ms)
+✔ signal measurements expose quiet intervals without claiming intentional ignoring (3.6669ms)
+✔ stale events cannot play a different conversation (2.2103ms)
+✔ late audio metadata cannot overwrite the next conversation (9.4271ms)
+✔ enqueuing audio cannot replace a subsequently selected chat (2.473ms)
+✔ unreviewed acoustic events remain candidates and descriptions are escaped (3.0135ms)
+✔ loading a different conversation removes previous actions immediately (24.5077ms)
+✔ late response from previous selection cannot replace current result (2.0338ms)
+✔ DEV preview arriving after a switch to PROD is discarded (4.424ms)
+✔ readable rendering preserves message identity and escapes model text (4.6441ms)
+✔ editions from another conversation cannot appear in the selected call (2.3666ms)
+✔ evidence opens original source even when readable edition is selected (2.3211ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1700.8805

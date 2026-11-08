@@ -1,0 +1,14 @@
+{
+  "checked_at_utc": "2026-11-08T05:17:26.038773+00:00",
+  "archive_integrity": "passed",
+  "fresh_extraction": "passed",
+  "isolated_server": "passed",
+  "synthetic_chat_count": 3,
+  "rules_only": true,
+  "key_required": false,
+  "idempotent_demo_setup": true,
+  "official_results_unchanged": true,
+  "text_line_ending_portability": "passed",
+  "modified_content_detection": "passed",
+  "final_archive_extraction_check": "passed"
+}

@@ -14,3 +14,5 @@ research/experiment/frozen_manifest.json
 research/*.png
 research/checklist_config.json
 *.log
+output/
+tmp/

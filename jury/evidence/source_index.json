@@ -1,0 +1,395 @@
+{
+  "description": "ID channel language and turn counts only. No text. Not a semantic reference.",
+  "records": [
+    {
+      "conversation_id": "p1-ru-001",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-ru-002",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 19
+    },
+    {
+      "conversation_id": "p1-ru-003",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 15
+    },
+    {
+      "conversation_id": "p1-ru-004",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-ru-005",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 16
+    },
+    {
+      "conversation_id": "p1-ru-006",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 15
+    },
+    {
+      "conversation_id": "p1-ru-007",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 13
+    },
+    {
+      "conversation_id": "p1-ru-008",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-ru-009",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 16
+    },
+    {
+      "conversation_id": "p1-ru-010",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 32
+    },
+    {
+      "conversation_id": "p1-ru-011",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-ru-012",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-ru-013",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-ru-014",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-ru-015",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-ru-016",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 16
+    },
+    {
+      "conversation_id": "p1-ru-017",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 15
+    },
+    {
+      "conversation_id": "p1-ru-018",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 13
+    },
+    {
+      "conversation_id": "p1-ru-019",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-ru-020",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-ru-021",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-ru-022",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-ru-023",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-ru-024",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-ru-025",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 11
+    },
+    {
+      "conversation_id": "p1-ru-026",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 13
+    },
+    {
+      "conversation_id": "p1-ru-027",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 24
+    },
+    {
+      "conversation_id": "p1-ru-028",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 16
+    },
+    {
+      "conversation_id": "p1-ru-029",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-ru-030",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-kz-001",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-kz-002",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-kz-003",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 26
+    },
+    {
+      "conversation_id": "p1-kz-004",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-kz-005",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-kz-006",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-kz-007",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-kz-008",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 13
+    },
+    {
+      "conversation_id": "p1-kz-009",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 20
+    },
+    {
+      "conversation_id": "p1-kz-010",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-kz-011",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-kz-012",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-kz-013",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-kz-014",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-kz-015",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-en-001",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-en-002",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-en-003",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-en-004",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-en-005",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-en-006",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 30
+    },
+    {
+      "conversation_id": "p1-en-007",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-en-008",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 20
+    },
+    {
+      "conversation_id": "p1-en-009",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-en-010",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-en-011",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-en-012",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p1-en-013",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p1-en-014",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 15
+    },
+    {
+      "conversation_id": "p1-en-015",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p4-ru-003",
+      "channel": "voice call",
+      "language": "RU",
+      "turn_count": 78
+    },
+    {
+      "conversation_id": "p4-ru-002",
+      "channel": "voice call",
+      "language": "RU",
+      "turn_count": 73
+    },
+    {
+      "conversation_id": "p4-ru-001",
+      "channel": "voice call",
+      "language": "RU",
+      "turn_count": 45
+    },
+    {
+      "conversation_id": "p4-ru-005",
+      "channel": "voice call",
+      "language": "RU",
+      "turn_count": 75
+    },
+    {
+      "conversation_id": "p4-ru-004",
+      "channel": "voice call",
+      "language": "RU",
+      "turn_count": 115
+    }
+  ]
+}
