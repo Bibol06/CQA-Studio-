@@ -1,0 +1,66 @@
+{
+  "description": "Control ID channel language and turn counts only; no transcript text.",
+  "group": "FBroker",
+  "records": [
+    {
+      "conversation_id": "p2-en-001",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 16
+    },
+    {
+      "conversation_id": "p2-en-002",
+      "channel": "agent chat",
+      "language": "EN",
+      "turn_count": 21
+    },
+    {
+      "conversation_id": "p2-kz-001",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 15
+    },
+    {
+      "conversation_id": "p2-kz-002",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p2-kz-003",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p2-kz-004",
+      "channel": "agent chat",
+      "language": "KZ",
+      "turn_count": 11
+    },
+    {
+      "conversation_id": "p2-ru-001",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 12
+    },
+    {
+      "conversation_id": "p2-ru-002",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 14
+    },
+    {
+      "conversation_id": "p2-ru-003",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 22
+    },
+    {
+      "conversation_id": "p2-ru-004",
+      "channel": "agent chat",
+      "language": "RU",
+      "turn_count": 15
+    }
+  ]
+}

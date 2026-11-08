@@ -1,0 +1,48 @@
+{
+  "group": "FBroker",
+  "team_name": "Fantastic Four",
+  "records": 10,
+  "ok": 10,
+  "error": 0,
+  "criteria_answers": 80,
+  "languages": {
+    "EN": 2,
+    "KZ": 4,
+    "RU": 4
+  },
+  "evaluation_code_commit": "99ea08596beb42afe9fdcbaa7f5a3cb359f8eaf0",
+  "checklist_version": 2,
+  "checklist_hash": "a01818ad99d9034c247078ef5370efe1841ba5e8ebe8ad35b5c1468ab619f95c",
+  "provider": "gemini",
+  "model": "gemini-3.5-flash-lite",
+  "prompt_version": "source-turns-v4",
+  "variant": "B",
+  "started_at_utc": "2026-11-08T06:27:44.926935+00:00",
+  "finished_at_utc": "2026-11-08T06:32:36.310947+00:00",
+  "attempts_total": 13,
+  "attempt_statuses": {
+    "completed": 10,
+    "failed": 3
+  },
+  "reasoning_modes_by_attempt": {
+    "low": 12,
+    "medium": 1
+  },
+  "failed_attempt_reasons": {
+    "Недопустимая ступень критерия 6": 3
+  },
+  "fallback": "p2-kz-004: three low outputs rejected for invalid K6; one medium output accepted. Same model checklist and B prompt; no manual correction.",
+  "known_input_tokens": 43807,
+  "known_output_tokens": 16253,
+  "usage_known_attempts": 13,
+  "cost_usd": null,
+  "source_records_unchanged": true,
+  "checklist_unchanged": true,
+  "schema_and_arithmetic_check": "passed against original source records",
+  "official_file": "results/prod/results.json",
+  "sha256": "fad99f97c0d95c89ac93dd38c9dd0c98eaf89e72aec22859b5e60930e5475552",
+  "swap_saved": 3,
+  "swap_evaluations": 0,
+  "swap_jobs": 0,
+  "note": "Completion and structural validity are not independently measured accuracy. No ground truth used for tuning."
+}
