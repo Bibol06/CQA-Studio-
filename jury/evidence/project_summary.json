@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-11-08T05:12:51.447012+00:00",
+  "generated_at_utc": "2026-11-08T06:35:31.713296+00:00",
   "checklist_version": 2,
   "checklist_hash": "a01818ad99d9034c247078ef5370efe1841ba5e8ebe8ad35b5c1468ab619f95c",
   "total": 65,
@@ -124,5 +124,5 @@
   "model_accuracy": null,
   "real_call_wer": null,
   "real_call_cer": null,
-  "prod_file_present": false
+  "prod_file_present": true
 }

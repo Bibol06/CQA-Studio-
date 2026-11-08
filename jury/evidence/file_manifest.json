@@ -1,6 +1,6 @@
 {
   "schema_version": "file-manifest-1",
-  "generated_at_utc": "2026-11-08T06:24:08.441941+00:00",
+  "generated_at_utc": "2026-11-08T06:36:20.911257+00:00",
   "note": "Self excluded. Text SHA-256 normalizes CRLF to LF for Git checkout portability; binary files use original bytes. Private data excluded.",
   "files": [
     {
@@ -11,15 +11,15 @@
     },
     {
       "path": "PUBLISH_GITHUB.md",
-      "size_bytes": 3822,
+      "size_bytes": 3802,
       "hash_mode": "utf8-lf",
-      "sha256": "6bc483d8f1af541ac15072a8479b640db6e5f7dd9953877424c50c140ea22686"
+      "sha256": "61d3615f10d006252bdad0f89e03419d3be50adf0e0336a699ea3277fe16c47d"
     },
     {
       "path": "README.md",
-      "size_bytes": 20463,
+      "size_bytes": 20745,
       "hash_mode": "utf8-lf",
-      "sha256": "01fea1a21584794b4b0a8de7cfbd9b5c6cd6181c82e1918a9565c42401cd6011"
+      "sha256": "6722bb287295d505f66481fda39a5ed53aae3f5f15c0bcb61ffa6405998b7c64"
     },
     {
       "path": "START_DEMO.cmd",
@@ -184,6 +184,12 @@
       "sha256": "4244eb41465e9bb5f98053ced1a7daa6ebba7a55fd23cda3cf4bbaf30d9549fb"
     },
     {
+      "path": "docs/CONTROL_RUN.md",
+      "size_bytes": 4562,
+      "hash_mode": "utf8-lf",
+      "sha256": "382dc17688432687ccfc7466ad3c44706d042bdda25f6d39b110a238caa149c8"
+    },
+    {
       "path": "docs/DECISIONS.md",
       "size_bytes": 4842,
       "hash_mode": "utf8-lf",
@@ -233,9 +239,9 @@
     },
     {
       "path": "docs/SUBMISSION_VALIDATION.md",
-      "size_bytes": 5321,
+      "size_bytes": 5535,
       "hash_mode": "utf8-lf",
-      "sha256": "25eb8029ca8cb69121d12a3986cd3f582a0cb94d2b4e72b7ec0f803a3e706ebb"
+      "sha256": "599561aa8c9843ba3e5159c00bf0554819059d449f3c5d0bc254fa68105d059f"
     },
     {
       "path": "docs/TRANSCRIPT_VALIDATION.md",
@@ -287,27 +293,27 @@
     },
     {
       "path": "jury/Freedom_CQA_Studio_Jury.pdf",
-      "size_bytes": 104749,
+      "size_bytes": 104776,
       "hash_mode": "binary",
-      "sha256": "0aa3694c3383c13e90d03bc011ab613f9806475bd54a9f04c2c3019ac5fb6baa"
+      "sha256": "c8b5cdf700acc4caa1e617223dcca56853b8a2ae944c6f798649f77c60f3d29f"
     },
     {
       "path": "jury/README.md",
-      "size_bytes": 5661,
+      "size_bytes": 5752,
       "hash_mode": "utf8-lf",
-      "sha256": "e4fdbae204e4d53a85ae4faa96605284ed57fd751bbefc5593e8212dd1d3be37"
+      "sha256": "30782155394b198492100e188d0681eaf96626c8e36c517eadd3c0aa4eed7dc5"
     },
     {
       "path": "jury/REQUIREMENTS.md",
-      "size_bytes": 4608,
+      "size_bytes": 4464,
       "hash_mode": "utf8-lf",
-      "sha256": "2240162d614c129f7e5e28aba615050f3da0a130d0882620409bd6b88c06dc18"
+      "sha256": "143964a3925f7050f628ff52e4810a47b688aac87ba005d33785152f2bf4b0f5"
     },
     {
       "path": "jury/RUNBOOK.md",
-      "size_bytes": 5138,
+      "size_bytes": 5497,
       "hash_mode": "utf8-lf",
-      "sha256": "3f2b636a2fb6ed33c4bb3c7262575c0877dd969652d6a6cb24144ac444dd6eed"
+      "sha256": "74bacd611d4c50a1a6b98f87c1917cb8cb1bd13cc2538f8ebb610c182fcbf2e0"
     },
     {
       "path": "jury/SOURCES.md",
@@ -323,9 +329,9 @@
     },
     {
       "path": "jury/build_overview.py",
-      "size_bytes": 17523,
+      "size_bytes": 17598,
       "hash_mode": "utf8-lf",
-      "sha256": "75fccb3e7767aafeded8e0bea182a42804d0409b5bedf79b6814919b287e9ee8"
+      "sha256": "a592bcc69bd67b930e3785bfd2428eeea9abf6d81ffa097abd0f42dbea6ce9cb"
     },
     {
       "path": "jury/build_package.py",
@@ -335,15 +341,15 @@
     },
     {
       "path": "jury/check_package.py",
-      "size_bytes": 2382,
+      "size_bytes": 3148,
       "hash_mode": "utf8-lf",
-      "sha256": "1c4805e24155517c96695cac74491d225ae5afe7ba83119b4116fa59db5a7aa3"
+      "sha256": "872f534498a257e358da505e6cb1a57b83c67fdf79773583c1957c1082c29740"
     },
     {
       "path": "jury/evidence/asr_summary.json",
       "size_bytes": 4169,
       "hash_mode": "utf8-lf",
-      "sha256": "54de5374ae194d320d315ee4cd5d66115238b0fd38bf0ed857c23e60bebf620d"
+      "sha256": "bf7a833815913d98d26dfdaad155ac5456dc0ccd61326a2468077fa34d071711"
     },
     {
       "path": "jury/evidence/design_check.json",
@@ -364,10 +370,22 @@
       "sha256": "f821d6b5544ecd6ef17c50cf53e3eb215dad3985c1941fee02dc90cfd485fa14"
     },
     {
-      "path": "jury/evidence/project_summary.json",
-      "size_bytes": 3016,
+      "path": "jury/evidence/prod_run.json",
+      "size_bytes": 1764,
       "hash_mode": "utf8-lf",
-      "sha256": "734777994a779c5271e145e531880190dd21358cf8048dfadef97851505d5535"
+      "sha256": "7f5d615507a5b2bfc2197c2e622835c24889991f5d4139240242ae7eba4c4242"
+    },
+    {
+      "path": "jury/evidence/prod_source_index.json",
+      "size_bytes": 1490,
+      "hash_mode": "utf8-lf",
+      "sha256": "5967365d8955f6372f5d4f68ab3d177baf5499da652a47dd484023766cec95e8"
+    },
+    {
+      "path": "jury/evidence/project_summary.json",
+      "size_bytes": 3015,
+      "hash_mode": "utf8-lf",
+      "sha256": "4545c0a381c76adb07e651ac2e0aa4fe4575a32cc5b0b936df3bd9691acb5d72"
     },
     {
       "path": "jury/evidence/python_tests.txt",
@@ -470,6 +488,12 @@
       "size_bytes": 0,
       "hash_mode": "binary",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "results/prod/results.json",
+      "size_bytes": 29011,
+      "hash_mode": "utf8-lf",
+      "sha256": "fad99f97c0d95c89ac93dd38c9dd0c98eaf89e72aec22859b5e60930e5475552"
     },
     {
       "path": "server.py",

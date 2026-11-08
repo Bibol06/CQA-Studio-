@@ -44,5 +44,8 @@
   "swap_saved": 3,
   "swap_evaluations": 0,
   "swap_jobs": 0,
-  "note": "Completion and structural validity are not independently measured accuracy. No ground truth used for tuning."
+  "note": "Completion and structural validity are not independently measured accuracy. No ground truth used for tuning.",
+  "first_results_commit": "1a45333",
+  "results_published": true,
+  "repository": "https://github.com/Bibol06/CQA-Studio-"
 }

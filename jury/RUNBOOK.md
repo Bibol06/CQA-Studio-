@@ -54,3 +54,5 @@ Node нужен только для тестов JavaScript, не для зап�
 ## Контроль перед отправкой
 
 Проверьте публичность репозитория и финальный commit. После получения контроля нужны оба файла `results/dev/results.json` и `results/prod/results.json`. Нужны реальные десять контрольных ID. Ссылка на Git должна быть передана организаторам; локальная проверка и архив не выполняют эту отправку.
+
+Контроль FBroker уже обработан и опубликован: 10 ok. Для полной проверки в рабочей базе используйте `python submission.py check results/prod/results.json --set prod --group FBroker`. Swap не оценивался. Подробности — [CONTROL_RUN.md](../docs/CONTROL_RUN.md).

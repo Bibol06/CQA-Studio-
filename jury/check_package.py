@@ -36,6 +36,13 @@ def check():
         'ok':sum(r['status']=='ok' for r in document['results']),'error':sum(r['status']=='error' for r in document['results']),
         'team_name':document['team_name'],'schema_version':document['schema_version'],
         'scope':'Integrity, recorded IDs and turn bounds, schema and arithmetic. Not semantic correctness or source authenticity.'}
+    if (ROOT/'results/prod/results.json').exists():
+        control_index=load(ROOT/'jury/evidence/prod_source_index.json')['records']
+        if len(control_index)!=10 or any(type(r['turn_count']) is not int or not 1<=r['turn_count']<=10000 for r in control_index):raise ValueError('Invalid control index')
+        control_records=[{'conversation_id':r['conversation_id'],'channel':r['channel'],'transcript':[None]*r['turn_count']} for r in control_index]
+        control=load(ROOT/'results/prod/results.json');validate(control,control_records,'prod')
+        summary.update({'prod_records':len(control['results']),'prod_ok':sum(r['status']=='ok' for r in control['results']),
+            'prod_error':sum(r['status']=='error' for r in control['results'])})
     print(json.dumps(summary,ensure_ascii=False,indent=2));return summary
 
 if __name__=='__main__':
