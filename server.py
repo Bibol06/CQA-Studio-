@@ -92,7 +92,7 @@ def make_server(port=8765,db_path=None):
                 if path=='/api/submission/catalog':return self.write_json({'groups':catalog(store),'team_name':store.submission_team()})
                 if path=='/api/health':
                     health=worker.health()
-                    return self.write_json({'ok':health['alive'] and health['state'] not in ['storage_error','error','stopped'],'version':'0.6.0','benchmark_variants':['A','B'],'background_queue':True,'insights':True,'analytics':True,'audio_analysis':True,'submission_schema':'1.0','worker':health})
+                    return self.write_json({'ok':health['alive'] and health['state'] not in ['storage_error','error','stopped'],'version':'0.7.0','benchmark_variants':['A','B'],'background_queue':True,'insights':True,'analytics':True,'audio_analysis':True,'submission_schema':'1.0','worker':health})
                 if path.startswith('/api/'): return self.write_json({'error':'Не найдено'},404)
                 target=STATIC/('index.html' if path=='/' else path.lstrip('/'))
                 if not target.resolve().is_relative_to(STATIC.resolve()) or not target.is_file(): return self.write_json({'error':'Не найдено'},404)

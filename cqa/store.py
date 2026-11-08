@@ -25,11 +25,14 @@ class Store:
             CREATE TABLE IF NOT EXISTS model_attempts(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,job_id INTEGER,status TEXT NOT NULL,payload TEXT NOT NULL,error TEXT,evaluation_id INTEGER,created_at TEXT NOT NULL,finished_at TEXT);
             CREATE TABLE IF NOT EXISTS audio_analyses(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS audio_reviews(id INTEGER PRIMARY KEY AUTOINCREMENT,analysis_id INTEGER NOT NULL,event_index INTEGER NOT NULL,verdict TEXT NOT NULL,note TEXT NOT NULL,created_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS asr_runs(id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL);
             ''')
             if 'dataset' not in [r['name'] for r in db.execute('PRAGMA table_info(conversations)')]:
                 db.execute("ALTER TABLE conversations ADD COLUMN dataset TEXT NOT NULL DEFAULT 'DEV'")
             if 'audio_analysis_id' not in [r['name'] for r in db.execute('PRAGMA table_info(jobs)')]:
                 db.execute('ALTER TABLE jobs ADD COLUMN audio_analysis_id INTEGER')
+            if 'asr_run_id' not in [r['name'] for r in db.execute('PRAGMA table_info(jobs)')]:
+                db.execute('ALTER TABLE jobs ADD COLUMN asr_run_id INTEGER')
             if not db.execute('SELECT 1 FROM checklists LIMIT 1').fetchone():
                 db.execute('INSERT INTO checklists VALUES(?,?,?)',(1,dumps(default_checklist()),now()))
     @contextmanager
@@ -103,7 +106,7 @@ class Store:
             group=db.execute('SELECT dataset FROM conversations WHERE id=?',(cid,)).fetchone()[0]
         audio=self.audio_history(cid)
         return {'record':record,'dataset_group':group,'evaluation':self.evaluation(ids[0]) if ids else None,'history':[self.evaluation(e) for e in ids[1:]],'current_version':self.config()['version'],
-                'audio_analysis':audio[0] if audio else None,'audio_history':audio[1:]}
+                'audio_analysis':audio[0] if audio else None,'audio_history':audio[1:],'asr_analysis':self.asr_latest(cid)}
     def overview(self):
         with self.db() as db:
             rows=[(json.loads(r['payload']),r['dataset']) for r in db.execute('SELECT payload,dataset FROM conversations ORDER BY id')]
@@ -164,6 +167,18 @@ class Store:
             if meta.get('attempt_id') is not None:
                 db.execute("UPDATE model_attempts SET status='completed',payload=?,finished_at=? WHERE id=? AND status='running'",(dumps(meta),now(),meta['attempt_id']))
         return aid
+
+    def asr_latest(self,cid):
+        with self.db() as db:row=db.execute('SELECT * FROM asr_runs WHERE conversation_id=? ORDER BY id DESC LIMIT 1',(cid,)).fetchone()
+        return {**json.loads(row['payload']),'id':row['id'],'created_at':row['created_at']} if row else None
+
+    def save_asr_result(self,cid,result,meta,job_id):
+        with self.db() as db:
+            cur=db.execute('INSERT INTO asr_runs(conversation_id,payload,created_at) VALUES(?,?,?)',(cid,dumps({'result':result,'meta':meta}),now()))
+            updated=db.execute("UPDATE jobs SET status='completed',asr_run_id=?,error=NULL,updated_at=? WHERE id=? AND status='running'",(cur.lastrowid,now(),job_id))
+            if updated.rowcount!=1:raise ValueError('Состояние ASR-задания изменилось')
+            if meta.get('attempt_id') is not None:db.execute("UPDATE model_attempts SET status='completed',payload=?,finished_at=? WHERE id=? AND status='running'",(dumps(meta),now(),meta['attempt_id']))
+        return cur.lastrowid
 
     def audio_history(self,cid=None):
         with self.db() as db:
@@ -232,12 +247,12 @@ class Store:
         if not isinstance(cids,list) or not 1<=len(cids)<=200 or any(not isinstance(cid,str) for cid in cids):
             raise ValueError('Выберите от 1 до 200 диалогов')
         if variant not in ['A','B']: raise ValueError('Неизвестный вариант оценки')
-        if kind not in ['text','audio']:raise ValueError('Неизвестный вид обработки')
+        if kind not in ['text','audio','asr']:raise ValueError('Неизвестный вид обработки')
         config=self.config();settings=self.settings();created=[];existing=[]
         for cid in cids:
             record=self.record(cid)
-            if kind=='audio' and (record['channel']!='voice call' or not record.get('audio_url')):raise ValueError('Анализ звука доступен только для звонков с записью')
-        if kind=='audio' and settings['provider']!='gemini':raise ValueError('Для анализа звука выберите Gemini в настройках модели')
+            if kind in ['audio','asr'] and (record['channel']!='voice call' or not record.get('audio_url')):raise ValueError('Анализ звука доступен только для звонков с записью')
+        if kind in ['audio','asr'] and settings['provider']!='gemini':raise ValueError('Для анализа звука выберите Gemini в настройках модели')
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             for cid in dict.fromkeys(cids):

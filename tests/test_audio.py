@@ -222,6 +222,10 @@ class AudioStoreTests(unittest.TestCase):
         other.job_state(jid,'running')
         other.save_audio_analysis('dev-60',validate_audio(audio_result(rows[60]),rows[60],wav_clip()),audio_attempt_meta(SETTINGS),jid)
         after,_=build(other,'dev','DEV','Fantastic Four');self.assertEqual(before,after)
+        asr_job=other.enqueue(['dev-60'],kind='asr')['created'][0]
+        pending_asr,_=build(other,'dev','DEV','Fantastic Four');self.assertEqual(before,pending_asr)
+        other.job_state(asr_job,'running');other.save_asr_result('dev-60',{'test':True},{'kind':'asr'},asr_job)
+        completed_asr,_=build(other,'dev','DEV','Fantastic Four');self.assertEqual(before,completed_asr)
 
 
 class AudioHttpTests(unittest.TestCase):

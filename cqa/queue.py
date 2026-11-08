@@ -41,11 +41,13 @@ class Worker:
     def finish_pending(self):
         item = self.pending
         self.status('saving', job_id=item['id'])
-        if item['kind'] in ['result','audio_result']:
+        if item['kind'] in ['result','audio_result','asr_result']:
             # COMMIT can have succeeded even if an I/O error was reported afterwards.
             checkpoint = self.store.job_checkpoint(item['id'])
             if checkpoint['status'] != 'completed':
-                if item['kind']=='audio_result':
+                if item['kind']=='asr_result':
+                    self.store.save_asr_result(item['cid'],item['result'],item['meta'],item['id'])
+                elif item['kind']=='audio_result':
                     self.store.save_audio_analysis(item['cid'],item['result'],item['meta'],item['id'])
                 else:
                     self.store.save_evaluation(item['cid'], item['config'], item['answers'],
@@ -81,6 +83,11 @@ class Worker:
                 if kind=='audio' and self.reload_audio:
                     module=importlib.reload(importlib.import_module('cqa.audio_analysis'))
                     audio_call=module.call_audio;audio_meta=module.audio_attempt_meta
+                asr_call=None
+                if kind=='asr':
+                    module=importlib.import_module('cqa.asr')
+                    if self.reload_audio:module=importlib.reload(module)
+                    asr_call=module.run_pipeline
                 try:
                     claimed = self.store.job_state(job['id'], 'running')
                 except sqlite3.Error:
@@ -92,7 +99,7 @@ class Worker:
                 self.status('processing', job_id=job['id'])
                 aid=None
                 started=time.monotonic()
-                initial_meta=audio_meta(settings) if kind=='audio' else attempt_meta(config,settings,payload['variant'])
+                initial_meta=({'kind':'asr','provider':settings['provider'],'model':settings['model'],'prompt_version':'asr-independent-v1','calls':0,'usage':{},'cost_usd':None} if kind=='asr' else audio_meta(settings) if kind=='audio' else attempt_meta(config,settings,payload['variant']))
                 try:
                     if settings['provider']!='rules':
                         try:
@@ -100,7 +107,12 @@ class Worker:
                         except sqlite3.Error:
                             self.pending={'kind':'error','id':job['id'],'error':'Не удалось сохранить начало запроса. Модель не вызывалась; повтор доступен вручную.'}
                             raise
-                    if kind=='audio':
+                    if kind=='asr':
+                        cached=self.store.detail(job['conversation_id']).get('audio_analysis')
+                        local=cached['result'].get('asr_comparison') if cached else None
+                        result,meta=asr_call(record,settings,key,self.media,local)
+                        self.pending={'kind':'asr_result','id':job['id'],'cid':job['conversation_id'],'result':result,'meta':{**initial_meta,**meta,'attempt_id':aid}}
+                    elif kind=='audio':
                         result,meta=audio_call(record,settings,key,self.media)
                         self.pending={'kind':'audio_result','id':job['id'],'cid':job['conversation_id'],
                                       'result':result,'meta':{**initial_meta,**meta,'attempt_id':aid}}
@@ -112,7 +124,7 @@ class Worker:
                     else:
                         answers, meta, insights = call_model(record, config, settings, key, payload['variant'])
                         meta={**initial_meta,**meta,'attempt_id':aid}
-                    if kind!='audio':
+                    if kind not in ['audio','asr']:
                         self.pending = {'kind': 'result', 'id': job['id'], 'cid': job['conversation_id'],
                                         'config': config, 'answers': answers, 'meta': meta, 'insights': insights}
                 except ValueError as error:

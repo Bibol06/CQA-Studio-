@@ -217,6 +217,7 @@ let resultsMode = "text";
 let transcriptMode = "readable";
 async function selectConversation(id) {
   const serial = ++selectionSerial;
+  if(typeof stopAsrPreview === "function") stopAsrPreview();
   $("#audio-player")?.pause?.();
   if (typeof audioPreviewEnd !== "undefined") audioPreviewEnd = null;
   selected = id;
@@ -297,8 +298,38 @@ function audioTime(value) {
   return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,"0")}`;
 }
 function resultModeTabs() {
-  return detail?.record.channel === "voice call" ? `<div class="result-mode-tabs" role="tablist" aria-label="Вид анализа звонка"><button role="tab" aria-selected="${resultsMode === "text"}" data-action="result-mode" data-mode="text">Чек-лист</button><button role="tab" aria-selected="${resultsMode === "audio"}" data-action="result-mode" data-mode="audio">${icon("phone")}Звук</button></div>` : "";
+  return detail?.record.channel === "voice call" ? `<div class="result-mode-tabs" role="tablist" aria-label="Вид анализа звонка"><button role="tab" aria-selected="${resultsMode === "text"}" data-action="result-mode" data-mode="text">Чек-лист</button><button role="tab" aria-selected="${resultsMode === "audio"}" data-action="result-mode" data-mode="audio">${icon("phone")}Звук</button><button role="tab" aria-selected="${resultsMode === "asr"}" data-action="result-mode" data-mode="asr">Распознавание</button></div>` : "";
 }
+const asrReferences=new Map();
+let asrAudioContext=null,asrAudioSource=null,asrPreviewSerial=0;
+function stopAsrPreview(){asrPreviewSerial++;if(asrAudioSource){try{asrAudioSource.stop();}catch{}asrAudioSource=null;}}
+function asrWords(text){return (text.normalize('NFC').toLowerCase().match(/[\p{L}\p{N}_]+/gu)||[]);}
+function editDistance(a,b){let prev=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){const next=[i];for(let j=1;j<=b.length;j++)next[j]=Math.min(prev[j]+1,next[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));prev=next;}return prev[b.length];}
+function asrMetrics(reference,hypothesis){const a=asrWords(reference),b=asrWords(hypothesis);if(!a.length)return null;const ac=a.join(' '),bc=b.join(' ');return {wer:editDistance(a,b)/a.length,cer:editDistance(ac,bc)/ac.length};}
+function currentAsr(){return detail?.asr_analysis?.result || detail?.audio_analysis?.result.asr_comparison || null;}
+function asrCases(data){
+  const local=data.local || data;
+  return [...(data.cloud ? [{id:'cloud',title:`Независимый ${data.cloud_engine} · вся запись`,raw:data.cloud.raw.text,clean:data.cloud.enhanced.text,rawNotes:data.cloud.raw.limitations||[],cleanNotes:data.cloud.enhanced.limitations||[],complete:data.cloud.raw.complete!==false&&data.cloud.enhanced.complete!==false}] : []),
+    ...(local.chunks || []).map((c,i)=>({id:String(i),title:`Whisper ≈${audioTime(c.start_seconds)}–${audioTime(c.end_seconds)}`,raw:c.raw_text,clean:c.enhanced_text,start:c.start_seconds,end:c.end_seconds}))];
+}
+function renderAsrResults(){
+  const data=currentAsr(),job=activeJob('asr');
+  let html=`<p>Независимое распознавание по звуку. Исходные реплики, редакция и оценки сохраняются.</p><button class="button primary" data-action="run-asr" ${job?'disabled':''}>${job?esc(jobLabels[job.status]):'Перераспознать: Whisper + Gemini'}</button><p>Очистка: ослабление стационарного шума и ограниченная нормализация. Она может ухудшить тихую речь. Улучшение точности ещё нужно проверить.</p>`;
+  const latest=jobsState.jobs.find(j=>j.conversation_id===selected&&j.kind==='asr');
+  if(latest?.error)html+=`<p class="submission-warning">${esc(latest.error)}</p>`;
+  if(data){
+    const local=data.local||data;
+    html+=`<p>${esc(local.engine)}. RU/KZ совместно, задача transcribe. Обработано ${fmt(local.processed_seconds)} с${local.full_recording?' · вся запись':' · пилотный фрагмент'}. Метки относятся к аудиофайлу, не к репликам организаторов.</p><p>Whisper tiny — компактная базовая модель; её ошибки нельзя выдавать за достоверные слова. Расхождение двух версий не является показателем точности.</p><button class="button secondary small" data-action="asr-preview">▶ Очищенная копия: первые ${local.preview?.end_seconds||0} с</button><button class="button text small" data-action="asr-stop">Остановить</button><button class="button secondary small" data-action="asr-export">Экспорт сравнения и эталонов</button><p>Эталон введите после прослушивания. Он хранится в текущей вкладке; сохраните экспорт перед перезагрузкой. Без эталона WER/CER не определены.</p>`;
+    for(const c of asrCases(data)){
+      const key=selected+'|'+data.audio_sha256+'|'+c.id,ref=asrReferences.get(key)||'';
+      html+=`<details class="asr-case" ${c.id==='cloud'?'open':''}><summary>${esc(c.title)}${c.complete===false?" · частично":""}</summary>${c.start!=null?`<button class="button text small" data-action="audio-seek" data-start="${c.start}" data-end="${c.end}">Слушать исходный фрагмент</button>`:''}<div class="asr-comparison"><section><h4>До обработки</h4><p class="asr-text">${esc(c.raw||'[Речь не распознана]')}</p><p>${(c.rawNotes||[]).map(esc).join(' · ')}</p></section><section><h4>После обработки</h4><p class="asr-text">${esc(c.clean||'[Речь не распознана]')}</p><p>${(c.cleanNotes||[]).map(esc).join(' · ')}</p></section></div><label class="field">Эталон после проверки аудио<textarea id="asr-ref-${c.id}" data-asr-ref="${c.id}" rows="4" maxlength="10000">${esc(ref)}</textarea></label><button class="button secondary small" data-action="asr-metrics" data-case="${c.id}">Посчитать WER/CER</button><p id="asr-score-${c.id}">Нет проверенного эталона.</p></details>`;
+    }
+  }else html+='<p>Результата независимого ASR пока нет. Новый запуск выполняется в очереди.</p>';
+  $('#results-panel').innerHTML=`<div class="results-header"><h2>Распознавание RU/KZ</h2></div>${resultModeTabs()}<div class="result-scroll audio-results">${html}</div>`;
+}
+function showAsrMetrics(id){const data=currentAsr(),c=asrCases(data).find(c=>c.id===id);const ref=$('#asr-ref-'+id).value;asrReferences.set(selected+'|'+data.audio_sha256+'|'+id,ref);const a=asrMetrics(ref,c.raw),b=asrMetrics(ref,c.clean);$('#asr-score-'+id).textContent=a?`По введённому эталону: до — WER ${(a.wer*100).toFixed(1)}%, CER ${(a.cer*100).toFixed(1)}%; после — WER ${(b.wer*100).toFixed(1)}%, CER ${(b.cer*100).toFixed(1)}%. Надёжность эталона проверяет человек.`:'Введите непустой эталон.';}
+async function playAsrPreview(){stopAsrPreview();const serial=asrPreviewSerial,cid=selected;const local=currentAsr()?.local||currentAsr();const encoded=local?.preview?.enhanced_wav_base64;if(!encoded)return;$('#audio-player')?.pause();asrAudioContext ||= new AudioContext();await asrAudioContext.resume();const bytes=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0));const buffer=await asrAudioContext.decodeAudioData(bytes.buffer);if(serial!==asrPreviewSerial||cid!==selected)return;asrAudioSource=asrAudioContext.createBufferSource();asrAudioSource.buffer=buffer;asrAudioSource.connect(asrAudioContext.destination);asrAudioSource.start();}
+function exportAsr(){const data=currentAsr();const cases=asrCases(data).map(c=>{const reference=asrReferences.get(selected+'|'+data.audio_sha256+'|'+c.id)||'';return {...c,reference,reference_verified_by_system:false,raw_metrics:asrMetrics(reference,c.raw),enhanced_metrics:asrMetrics(reference,c.clean)};});downloadJson({schema_version:'asr-comparison-1',created_at:new Date().toISOString(),conversation_id:selected,audio_sha256:data.audio_sha256,cloud_engine:data.cloud_engine||null,local_engine:(data.local||data).engine,processing:(data.local||data).processing,source_transcript_sent:false,cases},'asr-comparison-'+selected+'.json');}
 async function loadAudioInfo() {
   const cid = detail?.record.conversation_id, serial = selectionSerial;
   if (!cid || detail.record.channel !== "voice call") return;
@@ -387,6 +418,7 @@ function renderResults() {
   if (!detail) return;
   const r = detail.record,
     e = detail.evaluation;
+  if (r.channel === "voice call" && resultsMode === "asr") {renderAsrResults();return;}
   if (r.channel === "voice call" && resultsMode === "audio") {renderAudioResults();return;}
   if (!e) {
     $("#results-panel").innerHTML =
@@ -586,6 +618,8 @@ function renderQueueBanner() {
   $("#queue-banner").innerHTML =
     `${icon(problem ? "info" : c.running ? "refresh" : "clock", c.running ? "spinner" : "")}<span>${problem ? esc(problem) : `В работе: <strong>${c.running || 0}</strong> · ожидают: <strong>${c.queued || 0}</strong> · нужен ключ: <strong>${c.waiting_key || 0}</strong>`}</span><button class="button text" data-view="queue">Открыть очередь →</button>`;
   if (detail) {
+    const asrJob = activeJob("asr");
+    document.querySelectorAll('[data-action="run-asr"]').forEach(b=>{b.disabled=!!asrJob;b.textContent=asrJob?jobLabels[asrJob.status]:"Перераспознать: Whisper + Gemini";});
     const audioJob = activeJob("audio");
     document.querySelectorAll('[data-action="analyze-audio"]').forEach(b => {
       b.disabled = !!audioJob;
@@ -617,7 +651,7 @@ function queueProblem() {
 function renderQueue() {
   const c = jobsState.counts;
   $("#view-queue").innerHTML =
-    `<div class="section-card"><div class="editor-header"><div><h2>Задания обработки</h2><p>Счётчики за всё время. Показаны последние 300 заданий. Выполняется один запрос модели одновременно.</p></div><button class="button secondary" data-action="refresh-jobs">${icon("refresh")}Обновить</button></div><p class="${queueProblem() ? "submission-warning" : ""}">${esc(queueProblem() || (jobsState.worker ? "Обработчик работает. Задания выполняются последовательно." : "Получаем состояние обработчика…"))}</p><div class="queue-counters">${["queued", "running", "waiting_key", "completed", "failed", "interrupted", "paused"].map((s) => `<span class="badge ${["failed", "interrupted"].includes(s) ? "red" : s === "completed" ? "green" : ""}">${jobLabels[s]}: ${c[s] || 0}</span>`).join("")}</div><div class="table-scroll"><table class="data-table"><thead><tr><th>ЗАДАНИЕ / ДИАЛОГ</th><th>СТАТУС</th><th>МОДЕЛЬ / ЧЕК-ЛИСТ</th><th>ПОДРОБНОСТИ</th><th>ДЕЙСТВИЯ</th></tr></thead><tbody>${jobsState.jobs.length ? jobsState.jobs.map((j) => `<tr><td>#${j.id}<br><button data-action="open-result" data-id="${esc(j.conversation_id)}">${esc(j.conversation_id)}</button></td><td><span class="badge ${j.status === "completed" ? "green" : ["failed", "interrupted"].includes(j.status) ? "red" : "amber"}">${esc(jobLabels[j.status] || j.status)}</span></td><td>${esc(j.model || "Правила")}<br><small>${j.kind === "audio" ? "Звук · отдельный анализ" : "Чек-лист v" + j.checklist_version} · попыток ${j.attempts}</small></td><td class="job-error">${esc(j.error || (j.audio_analysis_id ? "Аудиоанализ #" + j.audio_analysis_id : j.evaluation_id ? "Результат #" + j.evaluation_id : "Создано " + new Date(j.created_at).toLocaleString("ru-RU")))}</td><td>${["failed", "interrupted"].includes(j.status) ? `<button class="button secondary small" data-action="retry-job" data-id="${j.id}">Повторить</button>` : ""}${["queued", "waiting_key", "paused", "failed", "interrupted"].includes(j.status) ? `<button class="button text" data-action="cancel-job" data-id="${j.id}">Отменить</button>` : ""}${j.status === "waiting_key" ? '<button class="button text" data-action="settings">Добавить ключ</button>' : ""}${j.status === "running" ? "Запрос уже отправлен" : ""}${j.status === "paused" ? '<button class="button text" data-action="resume-jobs">Возобновить очередь</button>' : ""}</td></tr>`).join("") : '<tr><td colspan="5">Очередь пуста. Выберите диалог и нажмите «Проверить диалог».</td></tr>'}</tbody></table></div></div>`;
+    `<div class="section-card"><div class="editor-header"><div><h2>Задания обработки</h2><p>Счётчики за всё время. Показаны последние 300 заданий. Выполняется один запрос модели одновременно.</p></div><button class="button secondary" data-action="refresh-jobs">${icon("refresh")}Обновить</button></div><p class="${queueProblem() ? "submission-warning" : ""}">${esc(queueProblem() || (jobsState.worker ? "Обработчик работает. Задания выполняются последовательно." : "Получаем состояние обработчика…"))}</p><div class="queue-counters">${["queued", "running", "waiting_key", "completed", "failed", "interrupted", "paused"].map((s) => `<span class="badge ${["failed", "interrupted"].includes(s) ? "red" : s === "completed" ? "green" : ""}">${jobLabels[s]}: ${c[s] || 0}</span>`).join("")}</div><div class="table-scroll"><table class="data-table"><thead><tr><th>ЗАДАНИЕ / ДИАЛОГ</th><th>СТАТУС</th><th>МОДЕЛЬ / ЧЕК-ЛИСТ</th><th>ПОДРОБНОСТИ</th><th>ДЕЙСТВИЯ</th></tr></thead><tbody>${jobsState.jobs.length ? jobsState.jobs.map((j) => `<tr><td>#${j.id}<br><button data-action="open-result" data-id="${esc(j.conversation_id)}">${esc(j.conversation_id)}</button></td><td><span class="badge ${j.status === "completed" ? "green" : ["failed", "interrupted"].includes(j.status) ? "red" : "amber"}">${esc(jobLabels[j.status] || j.status)}</span></td><td>${esc(j.model || "Правила")}<br><small>${j.kind === "asr" ? "Независимый ASR" : j.kind === "audio" ? "Звук · отдельный анализ" : "Чек-лист v" + j.checklist_version} · попыток ${j.attempts}</small></td><td class="job-error">${esc(j.error || (j.asr_run_id ? "ASR #" + j.asr_run_id : j.audio_analysis_id ? "Аудиоанализ #" + j.audio_analysis_id : j.evaluation_id ? "Результат #" + j.evaluation_id : "Создано " + new Date(j.created_at).toLocaleString("ru-RU")))}</td><td>${["failed", "interrupted"].includes(j.status) ? `<button class="button secondary small" data-action="retry-job" data-id="${j.id}">Повторить</button>` : ""}${["queued", "waiting_key", "paused", "failed", "interrupted"].includes(j.status) ? `<button class="button text" data-action="cancel-job" data-id="${j.id}">Отменить</button>` : ""}${j.status === "waiting_key" ? '<button class="button text" data-action="settings">Добавить ключ</button>' : ""}${j.status === "running" ? "Запрос уже отправлен" : ""}${j.status === "paused" ? '<button class="button text" data-action="resume-jobs">Возобновить очередь</button>' : ""}</td></tr>`).join("") : '<tr><td colspan="5">Очередь пуста. Выберите диалог и нажмите «Проверить диалог».</td></tr>'}</tbody></table></div></div>`;
 }
 async function pollJobs() {
   if (pollBusy) return;
@@ -1025,6 +1059,15 @@ document.addEventListener("click", async (event) => {
   const action = button.dataset.action;
   try {
     switch (action) {
+      case "run-asr":
+        await api("jobs",{conversation_ids:[selected],kind:"asr"});
+        await pollJobs();
+        if(detail?.record.channel === "voice call" && resultsMode === "asr") renderAsrResults();
+        break;
+      case "asr-preview": await playAsrPreview(); break;
+      case "asr-stop": stopAsrPreview(); break;
+      case "asr-metrics": showAsrMetrics(button.dataset.case); break;
+      case "asr-export": exportAsr(); break;
       case "channel-tab":
         await chooseChannel(button.dataset.channel);
         break;
@@ -1260,6 +1303,7 @@ async function init() {
       ? hash
       : state.records[0]?.conversation_id;
     if (id) await selectConversation(id);
+    if (new URLSearchParams(location.search).get('asr') === '1' && detail?.record.channel === 'voice call') {resultsMode='asr';renderResults();}
     await pollJobs();
     setInterval(pollJobs, 2000);
   } catch (error) {
@@ -1269,3 +1313,5 @@ async function init() {
   }
 }
 init();
+
+document.addEventListener("input",event=>{if(event.target.dataset.asrRef!=null){const data=currentAsr();if(data)asrReferences.set(selected+'|'+data.audio_sha256+'|'+event.target.dataset.asrRef,event.target.value);}});

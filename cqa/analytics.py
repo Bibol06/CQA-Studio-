@@ -76,7 +76,7 @@ def comparisons(evaluations, attempts):
         if not meta.get('attempt_id'):g['legacy_saved']+=1
         g['latest'][e['conversation_id']]=e
     for a in attempts:
-        if a['meta'].get('kind')=='audio':continue
+        if a['meta'].get('kind') in ['audio','asr']:continue
         meta=a['meta'];g=get(meta,meta.get('checklist_hash'))
         g['traced_attempts']+=1;g[a['status']]+=1
         if a['status']!='running' and isinstance(meta.get('elapsed_seconds'),(int,float)):
