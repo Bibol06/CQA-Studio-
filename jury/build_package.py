@@ -13,7 +13,7 @@ MANIFEST='jury/evidence/file_manifest.json'
 
 def fingerprint(name):
     path=ROOT/name;raw=path.read_bytes()
-    text=path.suffix.lower() in ['.py','.md','.js','.css','.html','.svg','.json','.txt','.csv','.cmd'] or path.name=='.gitignore'
+    text=path.suffix.lower() in ['.py','.md','.js','.cjs','.mjs','.css','.html','.svg','.json','.txt','.csv','.cmd'] or path.name=='.gitignore'
     canonical=raw.replace(b'\r\n',b'\n') if text else raw
     return {'path':name,'size_bytes':len(raw),'hash_mode':'utf8-lf' if text else 'binary','sha256':hashlib.sha256(canonical).hexdigest()}
 
@@ -29,7 +29,7 @@ def main():
         if len(p.parts)==1 and not (p.suffix in ['.py','.md','.cmd','.txt'] or name=='.gitignore'):continue
         if p.parts[0]=='research' and name not in ['research/checklist_clarified_v2.json','research/build_reference.py','research/experiment.py','research/live_report.py','research/full_dev_report.py','research/experiment/README.md','research/experiment/response_template.json']:continue
         if any(part in ['__pycache__','.git','data','.venv'] for part in p.parts) or p.suffix in ['.sqlite','.db','.pyc','.rar','.zip'] or p.name=='.env':raise ValueError('Private file selected: '+name)
-        if p.suffix.lower() in ['.py','.md','.txt','.json','.csv','.html','.js','.css','.cmd']:
+        if p.suffix.lower() in ['.py','.md','.txt','.json','.csv','.html','.js','.cjs','.mjs','.css','.cmd']:
             raw=source.read_text(encoding='utf-8-sig')
             if re.search(r'AIza[0-9A-Za-z_-]{30,}|sk-[A-Za-z0-9]{24,}',raw):raise ValueError('Credential-like value detected in '+name)
         names.append(name)

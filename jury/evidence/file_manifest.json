@@ -1,6 +1,6 @@
 {
   "schema_version": "file-manifest-1",
-  "generated_at_utc": "2026-11-08T06:20:12.948964+00:00",
+  "generated_at_utc": "2026-11-08T06:24:08.441941+00:00",
   "note": "Self excluded. Text SHA-256 normalizes CRLF to LF for Git checkout portability; binary files use original bytes. Private data excluded.",
   "files": [
     {
@@ -329,9 +329,9 @@
     },
     {
       "path": "jury/build_package.py",
-      "size_bytes": 3569,
+      "size_bytes": 3597,
       "hash_mode": "utf8-lf",
-      "sha256": "af8aeb8b285f76e32a880f3830fe5b783b5f0f18b4cc4bbe9f432dd0ce8d9ca7"
+      "sha256": "3e713d220e7489f7b78dc172ce88c317569654c29ecd350c23da01aef02d12b1"
     },
     {
       "path": "jury/check_package.py",
@@ -582,37 +582,37 @@
     {
       "path": "tests/ui_analytics.test.cjs",
       "size_bytes": 1348,
-      "hash_mode": "binary",
+      "hash_mode": "utf8-lf",
       "sha256": "513f3ccae306f9b1d0cc1dfa7388226775eb9e78b16ff88405d61f0e9cca7720"
     },
     {
       "path": "tests/ui_asr.test.cjs",
       "size_bytes": 3048,
-      "hash_mode": "binary",
+      "hash_mode": "utf8-lf",
       "sha256": "c0ad7ccbc5b0734c74d8d2d78e503cd2e3b99cce974c50f118f761a4c949c9fe"
     },
     {
       "path": "tests/ui_audio.test.cjs",
       "size_bytes": 4243,
-      "hash_mode": "binary",
+      "hash_mode": "utf8-lf",
       "sha256": "bb595a123d04eef3390fd9ed359fce1b4144da281635f565e5f88af80b0bdea7"
     },
     {
       "path": "tests/ui_selection.test.cjs",
       "size_bytes": 2323,
-      "hash_mode": "binary",
+      "hash_mode": "utf8-lf",
       "sha256": "d4e62596595fb515c8ed44b46fbe7a3537cfa6d6ea398a4adda453ca6de26fbc"
     },
     {
       "path": "tests/ui_submission.test.cjs",
       "size_bytes": 1554,
-      "hash_mode": "binary",
+      "hash_mode": "utf8-lf",
       "sha256": "fe60ae4338307c67d270273f6423058f2bfb7305de7f4ecc9f0cd46d6cbfdb14"
     },
     {
       "path": "tests/ui_transcript.test.cjs",
       "size_bytes": 2112,
-      "hash_mode": "binary",
+      "hash_mode": "utf8-lf",
       "sha256": "54cd6f6a99fc341f93bf60acd313d356a52814787d51a0ddd32e742f56d8dec2"
     }
   ]
