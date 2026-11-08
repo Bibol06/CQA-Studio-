@@ -1,14 +1,16 @@
-# Публикация CQA Studio в GitHub
+# Публикация Freedom CQA Studio в GitHub
 
-Материалы участника Бибол Жайлыбаев и команды Fantastic Four находятся в `jury/`. Файл для жюри — `jury/overview.pdf`. Полный переносимый архив — `output/jury/CQA-Studio-Fantastic-Four-Bibol.zip` в рабочей папке автора.
+Созданный репозиторий участника: [Bibol06/CQA-Studio-](https://github.com/Bibol06/CQA-Studio-). Название с завершающим дефисом допустимо; переименование для запуска не требуется. Фактическое наличие кода проверяется по ветке и commit после push.
+
+Материалы участника Бибол Жайлыбаев и команды Fantastic Four находятся в `jury/`. Файл для жюри — `jury/Freedom_CQA_Studio_Jury.pdf`. Полный переносимый архив — `output/jury/CQA-Studio-Fantastic-Four-Bibol.zip` в рабочей папке автора.
 
 ## Через сайт GitHub
 
 1. В своём аккаунте нажмите New repository. Выберите свободное имя, например `CQA-Studio`, и видимость Public для проверки жюри. Не добавляйте отдельный README до загрузки нашего комплекта.
 2. Распакуйте подготовленный ZIP. В новом репозитории выберите uploading an existing file или Add file → Upload files.
 3. Загрузите **содержимое внутренней папки** `CQA-Studio-Fantastic-Four`: в корне репозитория должны оказаться `README.md`, `server.py`, папки `cqa`, `static`, `jury`, `results` и остальные файлы. GitHub не распаковывает загруженный ZIP автоматически.
-4. Выполните Commit changes с сообщением `Add CQA Studio and jury materials`.
-5. Проверьте из доступного без авторизации окна, что открываются README, `jury/overview.pdf` и `results/dev/results.json`. Перешлите ссылку организаторам самостоятельно.
+4. Выполните Commit changes с сообщением `Add Freedom CQA Studio and jury materials`.
+5. Проверьте из доступного без авторизации окна, что открываются README, `jury/Freedom_CQA_Studio_Jury.pdf` и `results/dev/results.json`. Перешлите ссылку организаторам самостоятельно.
 
 Не загружайте всю текущую рабочую папку: в ней есть исключённые из поставки локальные данные. Используйте только подготовленный архив. Официальный Results JSON внутри него сохранён; оригинальные разговоры, SQLite и ключи исключены.
 

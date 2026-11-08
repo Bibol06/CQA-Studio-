@@ -16,3 +16,5 @@ research/checklist_config.json
 *.log
 output/
 tmp/
+~$*
+jury/overview.pdf

@@ -13,7 +13,7 @@ MANIFEST='jury/evidence/file_manifest.json'
 
 def fingerprint(name):
     path=ROOT/name;raw=path.read_bytes()
-    text=path.suffix.lower() in ['.py','.md','.js','.css','.html','.json','.txt','.csv','.cmd'] or path.name=='.gitignore'
+    text=path.suffix.lower() in ['.py','.md','.js','.css','.html','.svg','.json','.txt','.csv','.cmd'] or path.name=='.gitignore'
     canonical=raw.replace(b'\r\n',b'\n') if text else raw
     return {'path':name,'size_bytes':len(raw),'hash_mode':'utf8-lf' if text else 'binary','sha256':hashlib.sha256(canonical).hexdigest()}
 
@@ -23,7 +23,7 @@ def main():
     public_dirs={'cqa','static','tests','docs','jury','demo','results','research'}
     for name in sorted(set(result.stdout.splitlines())):
         p=Path(name);source=(ROOT/p).resolve()
-        if name==MANIFEST or not source.is_file():continue
+        if name==MANIFEST or p.name.startswith('~$') or not source.is_file():continue
         if not source.is_relative_to(ROOT):raise ValueError('File outside repository')
         if len(p.parts)>1 and p.parts[0] not in public_dirs:continue
         if len(p.parts)==1 and not (p.suffix in ['.py','.md','.cmd','.txt'] or name=='.gitignore'):continue
@@ -33,7 +33,7 @@ def main():
             raw=source.read_text(encoding='utf-8-sig')
             if re.search(r'AIza[0-9A-Za-z_-]{30,}|sk-[A-Za-z0-9]{24,}',raw):raise ValueError('Credential-like value detected in '+name)
         names.append(name)
-    required={'jury/overview.pdf','jury/evidence/project_summary.json','demo/synthetic_chats.json','START_DEMO.cmd','results/dev/results.json','jury/check_package.py','README.md'}
+    required={'jury/Freedom_CQA_Studio_Jury.pdf','jury/evidence/project_summary.json','demo/synthetic_chats.json','START_DEMO.cmd','results/dev/results.json','jury/check_package.py','README.md'}
     if not required.issubset(names):raise ValueError('Missing package files: '+str(required-set(names)))
     manifest={'schema_version':'file-manifest-1','generated_at_utc':datetime.now(timezone.utc).isoformat(),
         'note':'Self excluded. Text SHA-256 normalizes CRLF to LF for Git checkout portability; binary files use original bytes. Private data excluded.',

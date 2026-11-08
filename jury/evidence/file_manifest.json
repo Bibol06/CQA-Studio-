@@ -1,25 +1,25 @@
 {
   "schema_version": "file-manifest-1",
-  "generated_at_utc": "2026-11-08T05:31:41.479114+00:00",
+  "generated_at_utc": "2026-11-08T06:20:12.948964+00:00",
   "note": "Self excluded. Text SHA-256 normalizes CRLF to LF for Git checkout portability; binary files use original bytes. Private data excluded.",
   "files": [
     {
       "path": ".gitignore",
-      "size_bytes": 376,
+      "size_bytes": 400,
       "hash_mode": "utf8-lf",
-      "sha256": "debe6fd25bab020508edb80674b24b3c510ba7d63cf90f63619fe555f047eedd"
+      "sha256": "b6f4b66a08de630057964f0dd8cd671e749789cccc82febe6e987d7498fd0329"
     },
     {
       "path": "PUBLISH_GITHUB.md",
-      "size_bytes": 3360,
+      "size_bytes": 3822,
       "hash_mode": "utf8-lf",
-      "sha256": "382c609ab76254cc5b39cb69ccfd1af19ca4131366e444dbe29660567eb67c88"
+      "sha256": "6bc483d8f1af541ac15072a8479b640db6e5f7dd9953877424c50c140ea22686"
     },
     {
       "path": "README.md",
-      "size_bytes": 19877,
+      "size_bytes": 20463,
       "hash_mode": "utf8-lf",
-      "sha256": "c8a7a42c75a92e5fc686cf475154fb7cc02385ebeb9fa30872039e05ad446271"
+      "sha256": "01fea1a21584794b4b0a8de7cfbd9b5c6cd6181c82e1918a9565c42401cd6011"
     },
     {
       "path": "START_DEMO.cmd",
@@ -149,43 +149,43 @@
     },
     {
       "path": "docs/ANALYTICS.md",
-      "size_bytes": 13366,
+      "size_bytes": 13412,
       "hash_mode": "utf8-lf",
       "sha256": "ca8cc263e8fbe92841d7b1c014f36a085dc2482cb85bd57a646808e1dc5c96d2"
     },
     {
       "path": "docs/ANALYTICS_VALIDATION.md",
-      "size_bytes": 7803,
+      "size_bytes": 7849,
       "hash_mode": "utf8-lf",
       "sha256": "7e4ead6cc262d96248504ebb823a3a50f03950e4a19f714709135ab7b0735e4e"
     },
     {
       "path": "docs/ASR_PIPELINE.md",
-      "size_bytes": 11212,
+      "size_bytes": 11281,
       "hash_mode": "utf8-lf",
       "sha256": "e7369b1c6718512082d8ea559cc1ee7057eedf01b9bbab0a708ec8793a44e1a6"
     },
     {
       "path": "docs/ASR_VALIDATION.md",
-      "size_bytes": 4332,
+      "size_bytes": 4366,
       "hash_mode": "utf8-lf",
       "sha256": "735729ce1a60a94a83a32a3f4f1e93174faf36c69fdc3ba9df37f68ffe7c8dec"
     },
     {
       "path": "docs/AUDIO.md",
-      "size_bytes": 14128,
+      "size_bytes": 14186,
       "hash_mode": "utf8-lf",
       "sha256": "7401ddb3ac5b324eb32ebe2d9a2eb906258e5a1cdd1d2abe9503029aa634d18d"
     },
     {
       "path": "docs/AUDIO_VALIDATION.md",
-      "size_bytes": 7941,
+      "size_bytes": 7986,
       "hash_mode": "utf8-lf",
       "sha256": "4244eb41465e9bb5f98053ced1a7daa6ebba7a55fd23cda3cf4bbaf30d9549fb"
     },
     {
       "path": "docs/DECISIONS.md",
-      "size_bytes": 4816,
+      "size_bytes": 4842,
       "hash_mode": "utf8-lf",
       "sha256": "ce9c5f8a64ef2cd1fc533972b57293a0bd6cd79dad27e9fd0367065d5a832c13"
     },
@@ -196,20 +196,26 @@
       "sha256": "0958171b1f29641b2ce2a46a12ed8f8185b816f448e2d7c8c3d41f59848c4753"
     },
     {
+      "path": "docs/DESIGN.md",
+      "size_bytes": 4041,
+      "hash_mode": "utf8-lf",
+      "sha256": "6e0bad75a9f0ed3fd8a49ab0a4a06c0298a1921068a40f49039bdc1966d708f1"
+    },
+    {
       "path": "docs/FULL_DEV_RUN.md",
-      "size_bytes": 9759,
+      "size_bytes": 9824,
       "hash_mode": "utf8-lf",
       "sha256": "09d66af66dfed70cd33b0459464839a1dfee4287a77d421de8b5bbc3b8583f9b"
     },
     {
       "path": "docs/JURY_GUIDE.md",
-      "size_bytes": 15004,
+      "size_bytes": 15012,
       "hash_mode": "utf8-lf",
-      "sha256": "be864a51975dab34f09f11b67b894e15c1fd8e0d9f1a4f8c4ddb3bd520f0a66d"
+      "sha256": "62586ca01b2f2385c3b41501e98b0d55fa3fc67c4d4e282cc9416e1adec2b94e"
     },
     {
       "path": "docs/QUEUE_RECOVERY.md",
-      "size_bytes": 5891,
+      "size_bytes": 5922,
       "hash_mode": "utf8-lf",
       "sha256": "41879f904c52f06f0bdbdd437645ba233a366d328bddfeb4aafa0f050935794e"
     },
@@ -221,33 +227,33 @@
     },
     {
       "path": "docs/SUBMISSION.md",
-      "size_bytes": 8290,
+      "size_bytes": 8362,
       "hash_mode": "utf8-lf",
       "sha256": "caccce6546a5fe73c78b38bd44c00868a76894abcb977d4bff5e6607517041eb"
     },
     {
       "path": "docs/SUBMISSION_VALIDATION.md",
-      "size_bytes": 5281,
+      "size_bytes": 5321,
       "hash_mode": "utf8-lf",
       "sha256": "25eb8029ca8cb69121d12a3986cd3f582a0cb94d2b4e72b7ec0f803a3e706ebb"
     },
     {
       "path": "docs/TRANSCRIPT_VALIDATION.md",
-      "size_bytes": 3365,
+      "size_bytes": 3384,
       "hash_mode": "utf8-lf",
       "sha256": "c439a0e3a93f3d4b70193a2c8e25e887e018350121cfd61f141b9338ba7cc7b3"
     },
     {
       "path": "docs/UPDATE_VALIDATION.md",
-      "size_bytes": 8506,
+      "size_bytes": 8555,
       "hash_mode": "utf8-lf",
       "sha256": "5fb6eea04b6a21b4043996c0f8a54042604ecc8dc3bd964dbd930b0e94016b9c"
     },
     {
       "path": "docs/USER_GUIDE.md",
-      "size_bytes": 19725,
+      "size_bytes": 19733,
       "hash_mode": "utf8-lf",
-      "sha256": "ba8edb7edf12379deb39c439b3326af1c5484fb71142b02033e157ac1e80a93a"
+      "sha256": "4add7b5a70ee1cb40aeb768ad8052a4dc741586247157b2cef906c603c2236c0"
     },
     {
       "path": "docs/VALIDATION.md",
@@ -256,68 +262,80 @@
       "sha256": "c2a46db473ff44b2413205decdacd751895e66ae3d61c27e90a72989927fdfc6"
     },
     {
+      "path": "docs/images/demo.png",
+      "size_bytes": 200635,
+      "hash_mode": "binary",
+      "sha256": "14011f9b5dff1f4813bf5412d23038fe4e0eb8e97ec41a10be84e15d3843f296"
+    },
+    {
       "path": "jury/CANDIDATE.md",
-      "size_bytes": 3794,
+      "size_bytes": 3836,
       "hash_mode": "utf8-lf",
-      "sha256": "ddf412b952fc3c4fe8c98a2c72f84d9f5db7ad4b8cfe222943c601f172af194a"
+      "sha256": "ac07491c105eb42e42ae5f5cf4585e6c985aa4a15cc741db772e7b662ed5279d"
     },
     {
       "path": "jury/DEMO_AND_QA.md",
-      "size_bytes": 6745,
+      "size_bytes": 6790,
       "hash_mode": "utf8-lf",
-      "sha256": "9119ef5b53756bbbbd45a5e16177206c324bb5509cddd764ac9946a56e9bad35"
+      "sha256": "0b40ff946f38a08163d7045ad3444dcc6e904059ed9b003bfb31221e54062298"
     },
     {
       "path": "jury/EXPERIMENTS.md",
-      "size_bytes": 4449,
+      "size_bytes": 4474,
       "hash_mode": "utf8-lf",
       "sha256": "8f8f4f03de5ad194d51bf5e32f9cab9ae377a8c90c6520231a35c4bd8af394e4"
     },
     {
+      "path": "jury/Freedom_CQA_Studio_Jury.pdf",
+      "size_bytes": 104749,
+      "hash_mode": "binary",
+      "sha256": "0aa3694c3383c13e90d03bc011ab613f9806475bd54a9f04c2c3019ac5fb6baa"
+    },
+    {
       "path": "jury/README.md",
-      "size_bytes": 5506,
+      "size_bytes": 5661,
       "hash_mode": "utf8-lf",
-      "sha256": "e91ea55bc10e85ac98dc8bfb7b8041524a46b40108c9ceb49d1048c84421282d"
+      "sha256": "e4fdbae204e4d53a85ae4faa96605284ed57fd751bbefc5593e8212dd1d3be37"
     },
     {
       "path": "jury/REQUIREMENTS.md",
-      "size_bytes": 4582,
+      "size_bytes": 4608,
       "hash_mode": "utf8-lf",
       "sha256": "2240162d614c129f7e5e28aba615050f3da0a130d0882620409bd6b88c06dc18"
     },
     {
       "path": "jury/RUNBOOK.md",
-      "size_bytes": 5082,
+      "size_bytes": 5138,
       "hash_mode": "utf8-lf",
       "sha256": "3f2b636a2fb6ed33c4bb3c7262575c0877dd969652d6a6cb24144ac444dd6eed"
     },
     {
       "path": "jury/SOURCES.md",
-      "size_bytes": 2665,
+      "size_bytes": 2690,
       "hash_mode": "utf8-lf",
-      "sha256": "e0675ed9ca032c8a76d5cb3987ee78190091d7fbc354c58d12f1a8f4dccfb045"
+      "sha256": "49739e7a53f24bfba7c8abc0272bcce3e10694b3e78a00413d4c94cf1ae24dab"
     },
     {
       "path": "jury/build_evidence.py",
-      "size_bytes": 4756,
+      "size_bytes": 4826,
       "hash_mode": "utf8-lf",
       "sha256": "c664efeb037d88dc0df8b6b2b99f0d9d2ce366e3c939a2ba21b34c713d74728e"
     },
     {
       "path": "jury/build_overview.py",
-      "size_bytes": 17372,
+      "size_bytes": 17523,
       "hash_mode": "utf8-lf",
-      "sha256": "a7631bee436eeb6acb79a3321aebb0fd00da2161d990b64c6ee5cdc220201243"
+      "sha256": "75fccb3e7767aafeded8e0bea182a42804d0409b5bedf79b6814919b287e9ee8"
     },
     {
       "path": "jury/build_package.py",
-      "size_bytes": 3472,
+      "size_bytes": 3569,
       "hash_mode": "utf8-lf",
-      "sha256": "c679a8b708060ad46fffac59f7d08101a67134d98831540c529666cd0068ee45"
+      "sha256": "af8aeb8b285f76e32a880f3830fe5b783b5f0f18b4cc4bbe9f432dd0ce8d9ca7"
     },
     {
       "path": "jury/check_package.py",
-      "size_bytes": 2339,
+      "size_bytes": 2382,
       "hash_mode": "utf8-lf",
       "sha256": "1c4805e24155517c96695cac74491d225ae5afe7ba83119b4116fa59db5a7aa3"
     },
@@ -326,6 +344,12 @@
       "size_bytes": 4169,
       "hash_mode": "utf8-lf",
       "sha256": "54de5374ae194d320d315ee4cd5d66115238b0fd38bf0ed857c23e60bebf620d"
+    },
+    {
+      "path": "jury/evidence/design_check.json",
+      "size_bytes": 1378,
+      "hash_mode": "utf8-lf",
+      "sha256": "1e54acd9344ff81c888f634f73c511a46a46e4b2d3bd0dd997933f9cc09ba523"
     },
     {
       "path": "jury/evidence/javascript_tests.txt",
@@ -368,12 +392,6 @@
       "size_bytes": 148,
       "hash_mode": "utf8-lf",
       "sha256": "07a033c21b474e50ac83ea92c3bebddd7590eceed1f2f9a698a0ce53dcf94b6d"
-    },
-    {
-      "path": "jury/overview.pdf",
-      "size_bytes": 104646,
-      "hash_mode": "binary",
-      "sha256": "1eeca5b5f1eb155a14b080674243963d0b0bbeb33aeedff2394970e805e3ce55"
     },
     {
       "path": "measure_calls.py",
@@ -473,21 +491,33 @@
     },
     {
       "path": "static/app.js",
-      "size_bytes": 114522,
+      "size_bytes": 114915,
       "hash_mode": "utf8-lf",
-      "sha256": "453ffcd6c44713eb8fd213d768db45b8261e009e88b33a333b1cc95a1c56e3a0"
+      "sha256": "bec6a2608725d0c0e3fa044b715c4a77be19cff7e634eafe8ef5e38072dae287"
     },
     {
       "path": "static/favicon.svg",
-      "size_bytes": 236,
-      "hash_mode": "binary",
-      "sha256": "6b634441d67bc24c52be8ada693495a29f64eac0d0c7db62d112b05377b08e7d"
+      "size_bytes": 40631,
+      "hash_mode": "utf8-lf",
+      "sha256": "f0c2dc8d642d375d75cb61b8bbc522247f7757321f3dd6ec92febe4e6a2857a2"
+    },
+    {
+      "path": "static/freedom-bank-mark.svg",
+      "size_bytes": 40631,
+      "hash_mode": "utf8-lf",
+      "sha256": "f0c2dc8d642d375d75cb61b8bbc522247f7757321f3dd6ec92febe4e6a2857a2"
+    },
+    {
+      "path": "static/freedom-theme.css",
+      "size_bytes": 19904,
+      "hash_mode": "utf8-lf",
+      "sha256": "8b7cae33e7e5dad8d454649a2669dc9a9361324d8bf911d09ca9fa671a3405f7"
     },
     {
       "path": "static/index.html",
-      "size_bytes": 7948,
+      "size_bytes": 8625,
       "hash_mode": "utf8-lf",
-      "sha256": "82fffcd85713aec319350add89c56cdca6aad67936f5499f6eb210d34475755c"
+      "sha256": "9559636bfb063c2deeac4ee79d6b40e3141202de0429a99e52ee80e5e5dbd2a6"
     },
     {
       "path": "static/style.css",

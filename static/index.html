@@ -3,46 +3,48 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#143e31" />
-    <title>CQA Studio — качество каждого диалога</title>
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#81cb45" />
+    <title>Freedom CQA Studio — качество каждого диалога</title>
+    <link rel="icon" href="/favicon.svg?brand=freedom" type="image/svg+xml" />
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/freedom-theme.css?v=2" />
     <script src="/app.js" defer></script>
   </head>
   <body>
     <aside class="rail">
-      <a class="brand" href="/" aria-label="CQA Studio"
-        ><span class="brand-symbol">c<span>q</span></span
-        ><span>CQA<span class="brand-light"> Studio</span></span></a
+      <a class="brand" href="/" aria-label="Freedom CQA Studio"
+        ><span class="brand-symbol" aria-hidden="true"><img src="/freedom-bank-mark.svg" alt="" width="40" height="46" /></span
+        ><span class="brand-copy"><strong>Freedom</strong><small>CQA Studio</small></span></a
       >
       <div class="workspace-tag">
         <span class="status-dot"></span> FREEDOM · DATA CHALLENGE
       </div>
+      <div class="nav-section-label">Рабочее пространство</div>
       <nav aria-label="Основная навигация">
-        <button class="nav-item active" data-view="dialogs">
+        <button class="nav-item active" data-view="dialogs" title="Диалоги">
           <span data-icon="messages"></span>Диалоги<span
             id="nav-count"
             class="nav-count"
             >—</span
           >
         </button>
-        <button class="nav-item" data-view="checklist">
+        <button class="nav-item" data-view="checklist" title="Чек-лист">
           <span data-icon="checklist"></span>Чек-лист
         </button>
-        <button class="nav-item" data-view="analytics">
+        <button class="nav-item" data-view="analytics" title="Обзор качества">
           <span data-icon="chart"></span>Обзор качества
         </button>
-        <button class="nav-item" data-view="queue">
+        <button class="nav-item" data-view="queue" title="Очередь">
           <span data-icon="clock"></span>Очередь<span
             id="queue-count"
             class="nav-count"
             >0</span
           >
         </button>
-        <button class="nav-item" data-view="submission">
+        <button class="nav-item" data-view="submission" title="Сдача жюри">
           <span data-icon="download"></span>Сдача жюри
         </button>
-        <button class="nav-item" data-view="help">
+        <button class="nav-item" data-view="help" title="Как пользоваться">
           <span data-icon="info"></span>Как пользоваться
         </button>
       </nav>
@@ -51,12 +53,12 @@
         ><strong>Каждая оценка объяснима.</strong>
         <p>От реплики к решению — с сохранением всей истории.</p>
       </div>
-      <button class="nav-item settings-button" data-action="settings">
+      <button class="nav-item settings-button" data-action="settings" title="Настройки модели">
         <span data-icon="settings"></span>Настройки модели
       </button>
       <div class="rail-footer">
-        <span class="avatar">QA</span
-        ><span>Команда проверки<small>Локальное пространство</small></span>
+        <span class="avatar">БЖ</span
+        ><span>Fantastic Four<small>Бибол Жайлыбаев</small></span>
       </div>
     </aside>
     <main class="workspace">
@@ -79,9 +81,10 @@
         </div>
       </header>
       <section class="page-heading">
+        <div class="hero-motif" aria-hidden="true"><span></span><svg viewBox="0 0 80 80"><path d="M21 22h38a8 8 0 0 1 8 8v19a8 8 0 0 1-8 8H41L26 68V57h-5a8 8 0 0 1-8-8V30a8 8 0 0 1 8-8Z"/><path d="m28 39 9 9 17-18"/></svg></div>
         <div>
           <div class="eyebrow">CONVERSATION QUALITY ANALYTICS</div>
-          <h1 id="page-title">Качество начинается с диалога<span>.</span></h1>
+          <h1 id="page-title">Контроль качества диалогов<span>.</span></h1>
           <p id="page-description">
             Оценивайте работу оператора. Проверяйте доказательства. Принимайте
             взвешенные решения.
@@ -151,8 +154,7 @@
               aria-label="Список диалогов"
             ></div>
             <div class="list-footer">
-              <span class="status-dot"></span>DEV · исходные данные
-              организаторов
+              <span class="status-dot"></span><span id="list-source-label">Исходные диалоги</span>
             </div>
           </aside>
           <section class="transcript-panel" id="transcript-panel">
@@ -169,7 +171,7 @@
       <section id="view-help" class="view"></section>
       <section id="view-submission" class="view"></section>
       <footer class="page-footer">
-        <span>CQA Studio</span><span>Сначала доказательство. Затем оценка.</span
+        <span>Freedom CQA Studio</span><span>Сначала доказательство. Затем оценка.</span
         ><span>Data Challenge ’26</span>
       </footer>
     </main>

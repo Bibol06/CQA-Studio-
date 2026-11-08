@@ -251,6 +251,10 @@ function safeUrl(value) {
 }
 function renderDetail() {
   if (!detail) return;
+  const sourceLabel = $("#list-source-label");
+  if (sourceLabel) sourceLabel.textContent = detail.dataset_group === "PUBLIC_DEMO_SYNTHETIC"
+    ? "Синтетические примеры · демо"
+    : detail.dataset_group ? detail.dataset_group + " · исходные диалоги" : "Исходные диалоги";
   renderTranscript();
   renderResults();
   renderQueueBanner();
@@ -275,7 +279,7 @@ function renderTranscript() {
   const edits = readable ? new Map(edition.turns.map(t => [t.message_index,t])) : null;
   const editionTools = r.channel === "voice call" ? `<div class="transcript-edition-tools"><div role="tablist" aria-label="Версия расшифровки"><button role="tab" data-action="transcript-mode" data-mode="readable" aria-selected="${readable}" ${!edition ? "disabled" : ""}>Читаемый текст</button><button role="tab" data-action="transcript-mode" data-mode="original" aria-selected="${!readable}">Оригинал</button></div><button class="button text small" data-action="revise-transcript">${edition ? "Обновить текст и звук" : "Исправить текст по записи"}</button><p>${readable ? `${edition.editor === "assistant" ? "Редакторская версия AI" : "Редакция AI по записи"}: изменено реплик ${edition.changed_turns}; неуверенных ${edition.uncertain_turns}. ${edition.validation?.fallback_turns ? `Правки ${edition.validation.fallback_turns} реплик отклонены — оставлен оригинал. ` : ""}Неразборчивые слова отмечены; проверьте спорные места по звуку.` : "Оригинал распознавания организаторов. Читаемая редакция исправляет оформление и явные ошибки по записи."} Оценки и цитаты используют оригинал.</p>${detail.audio_analysis?.result.readable_transcript_error ? `<p class="submission-warning">Новая редакция не сохранена: ${esc(detail.audio_analysis.result.readable_transcript_error)}</p>` : ""}</div>` : "";
   $("#transcript-panel").innerHTML =
-    `<div class="transcript-heading"><span class="channel-avatar">${icon(r.channel === "voice call" ? "phone" : "messages")}</span><div><h2>${esc(r.conversation_id)}</h2><p>${r.channel === "voice call" ? "Телефонный разговор" : "Переписка с поддержкой"} · ${esc(r.language)} · ${r.transcript.length} реплик</p></div><div class="transcript-actions"><span class="badge green">${esc(detail.dataset_group || "DEV")}</span></div></div>${url ? `<div class="audio-box"><audio id="audio-player" data-cid="${esc(r.conversation_id)}" controls preload="metadata" src="${url}"></audio><div id="audio-status" class="audio-status">Получаем запись и длительность…</div><button class="button text small" data-action="audio-info">Проверить запись</button><p>Время плеера начинается с 0:00 записи. Связь с ISO-метками транскрипта отдельно не подтверждена.</p></div>` : ""}${editionTools}<div class="transcript-tools"><span>${readable ? "Читаемая редакция AI" : "Исходный транскрипт"}</span><label class="toggle"><input type="checkbox" id="context-toggle" ${showContext ? "checked" : ""}>Бот и события</label></div><div class="transcript-messages" id="messages">${r.transcript
+    `<div class="transcript-heading"><span class="channel-avatar">${icon(r.channel === "voice call" ? "phone" : "messages")}</span><div><h2>${esc(r.conversation_id)}</h2><p>${r.channel === "voice call" ? "Телефонный разговор" : "Переписка с поддержкой"} · ${esc(r.language)} · ${r.transcript.length} реплик</p></div><div class="transcript-actions"><span class="badge green">${esc(detail.dataset_group === "PUBLIC_DEMO_SYNTHETIC" ? "Демо" : detail.dataset_group || "DEV")}</span></div></div>${url ? `<div class="audio-box"><audio id="audio-player" data-cid="${esc(r.conversation_id)}" controls preload="metadata" src="${url}"></audio><div id="audio-status" class="audio-status">Получаем запись и длительность…</div><button class="button text small" data-action="audio-info">Проверить запись</button><p>Время плеера начинается с 0:00 записи. Связь с ISO-метками транскрипта отдельно не подтверждена.</p></div>` : ""}${editionTools}<div class="transcript-tools"><span>${readable ? "Читаемая редакция AI" : "Исходный транскрипт"}</span><label class="toggle"><input type="checkbox" id="context-toggle" ${showContext ? "checked" : ""}>Бот и события</label></div><div class="transcript-messages" id="messages">${r.transcript
       .map((t, i) => ({ t, i }))
       .filter(({ t }) => showContext || !["bot", "system"].includes(t.speaker))
       .map(({ t, i }) => transcriptMessage(t,i,edits))
@@ -557,7 +561,7 @@ function switchView(next) {
   const titles = {
     dialogs: [
       "Диалоги",
-      "Качество начинается с диалога",
+      "Контроль качества диалогов",
       "Оценивайте работу оператора. Проверяйте доказательства. Принимайте взвешенные решения.",
     ],
     checklist: [

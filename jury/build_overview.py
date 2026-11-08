@@ -49,7 +49,7 @@ def architecture():
 
 def footer(c,doc):
  c.saveState();c.setFont('Body',8);c.setFillColor(colors.HexColor('#666666'))
- c.drawString(44,814,'CQA STUDIO  /  FANTASTIC FOUR')
+ c.drawString(44,814,'FREEDOM CQA STUDIO  /  FANTASTIC FOUR')
  c.drawString(44,26,'Бибол Жайлыбаев  |  8 ноября 2026  |  версия 0.7.0')
  c.drawRightString(551,26,f'{doc.page} / 5');c.restoreState()
 
@@ -59,8 +59,8 @@ def main():
  assert summary['submission_ok']==65 and summary['submission_error']==0
  assert tests['python_tests.txt']['tests']==141 and tests['javascript_tests.txt']['tests']==18
  story=[]
- story += [p('CQA Studio','title'),p('Материалы для технической проверки','sub'),p('<b>Бибол Жайлыбаев</b><br/>Команда Fantastic Four<br/>Data Challenge 2026'),
-  p('CQA Studio помогает проверяющему оценивать качество клиентской поддержки по изменяемым правилам, видеть основания и сохранять решение при пересмотре. Рабочий прототип обрабатывает тексты RU KZ EN и дополнительно анализирует записи звонков.'),
+ story += [p('Freedom CQA Studio','title'),p('Материалы для технической проверки','sub'),p('<b>Бибол Жайлыбаев</b><br/>Команда Fantastic Four<br/>Data Challenge 2026'),
+  p('Freedom CQA Studio помогает проверяющему оценивать качество клиентской поддержки по изменяемым правилам, видеть основания и сохранять решение при пересмотре. Рабочий прототип обрабатывает тексты RU KZ EN и дополнительно анализирует записи звонков.'),
   p('Подтверждённый объём','h'),table([['Показатель','Результат'],['Полные оценки DEV','65 из 65 диалогов'],['Ответы по восьми критериям','520'],['Звонки с парным распознаванием','5'],['Программные тесты','141 Python и 18 JavaScript']],[290,215]),
   p('Что получает проверяющий','h'),p('Карточку диалога с баллами и репликами-доказательствами. Версионируемый чек-лист с весами, шкалами и N/A. Апелляцию, решение с причиной и сохранённую исходную оценку. Дополнительно доступны резюме, рекомендации, очередь и аналитика.'),
   p('Границы результата','h'),p('65/65 означает покрытие набора, а не точность модели. Независимый человеческий эталон ещё не собран. Контрольный PROD-файл не сформирован без выданных десяти чатов. Исходные разговоры и ключи не входят в публичную поставку.'),
@@ -88,9 +88,9 @@ def main():
   p('Следующие инженерные шаги','h'),p('Собрать независимую разметку RU KZ EN и смешанной речи, измерить ошибки по критериям и пропуски грубых нарушений. Затем добавить проверенную базу знаний, управление доступом и правила хранения. Для бизнес-эффекта нужны измерения времени проверяющего или подтверждённые исходы CRM.'),
   p('Быстрый запуск из архива: START_DEMO.cmd → http://127.0.0.1:8766. Три чата синтетические, выводы получены правилами, не AI. Для реального анализа нужны официальный JSON и ключ выбранного провайдера.','small'),
   p('Источники требований: CQA Hackathon Student Guide v3, стр. 1–4; CQA Student Guide Appendix Results, стр. 1–3. Подробная инструкция и ответы: jury/DEMO_AND_QA.md.','small')]
- out=ROOT/'output/pdf/CQA_Studio_Bibol_Jury.pdf';out.parent.mkdir(parents=True,exist_ok=True)
+ out=ROOT/'output/pdf/Freedom_CQA_Studio_Bibol_Jury.pdf';out.parent.mkdir(parents=True,exist_ok=True)
  SimpleDocTemplate(str(out),pagesize=A4,rightMargin=44,leftMargin=44,topMargin=48,bottomMargin=46,
-  title='CQA Studio Материалы для жюри',author='Бибол Жайлыбаев',subject='Fantastic Four CQA hackathon technical review').build(story,onFirstPage=footer,onLaterPages=footer)
- (ROOT/'jury/overview.pdf').write_bytes(out.read_bytes());print(out)
+  title='Freedom CQA Studio Материалы для жюри',author='Бибол Жайлыбаев',subject='Fantastic Four CQA hackathon technical review').build(story,onFirstPage=footer,onLaterPages=footer)
+ (ROOT/'jury/Freedom_CQA_Studio_Jury.pdf').write_bytes(out.read_bytes());print(out)
 
 if __name__=='__main__':main()

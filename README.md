@@ -1,6 +1,10 @@
-# CQA Studio
+# Freedom CQA Studio
 
 **Бибол Жайлыбаев · Fantastic Four · версия 0.7.0.** [Материалы для жюри](jury/README.md): краткий PDF, соответствие заданию, запуск, эксперименты и сценарий защиты. Для проверки интерфейса без закрытых данных запустите `START_DEMO.cmd`; это три синтетических чата и ограниченный режим правил. Официальные AI-результаты — отдельно в `results/dev/results.json`.
+
+![Светлый интерфейс Freedom CQA Studio на синтетических примерах](docs/images/demo.png)
+
+Обновлённый интерфейс вдохновлён стилем Freedom Bank. На скриншоте — отдельная демонстрация без API-ключа; её показатели не относятся к официальному DEV. [Оформление и проверка адаптивности](docs/DESIGN.md).
 
 Прототип Conversation Quality Analytics для Freedom Broker / Data Challenge ’26.
 
@@ -9,6 +13,11 @@
 ## Запуск
 
 Требуется Python 3.11 или новее. Сторонних зависимостей для приложения нет.
+
+```powershell
+git clone https://github.com/Bibol06/CQA-Studio-.git
+cd CQA-Studio-
+```
 
 ```powershell
 python server.py

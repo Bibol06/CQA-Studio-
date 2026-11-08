@@ -1,0 +1,70 @@
+{
+  "note": "Freedom CQA Studio branding and local headless browser checks. Read-only navigation; no model calls.",
+  "checks": [
+    {
+      "size": {
+        "width": 1600,
+        "height": 1050
+      },
+      "overflow": {
+        "document": 1600,
+        "viewport": 1600,
+        "body": 1600
+      },
+      "errors": [],
+      "nav": [
+        {
+          "view": "analytics",
+          "visible": true,
+          "width": 1600
+        },
+        {
+          "view": "checklist",
+          "visible": true,
+          "width": 1600
+        },
+        {
+          "view": "queue",
+          "visible": true,
+          "width": 1600
+        },
+        {
+          "view": "submission",
+          "visible": true,
+          "width": 1600
+        },
+        {
+          "view": "help",
+          "visible": true,
+          "width": 1600
+        }
+      ]
+    },
+    {
+      "size": {
+        "width": 1024,
+        "height": 900
+      },
+      "overflow": {
+        "document": 1024,
+        "viewport": 1024,
+        "body": 1024
+      },
+      "errors": [],
+      "nav": []
+    },
+    {
+      "size": {
+        "width": 390,
+        "height": 844
+      },
+      "overflow": {
+        "document": 390,
+        "viewport": 390,
+        "body": 390
+      },
+      "errors": [],
+      "nav": []
+    }
+  ]
+}
